@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import * as campaignService from '@/services/campaign.service';
 import { createCampaignSchema } from '@/schemas/campaign.schema';
 import { checkRateLimit } from '@/services/security.service';
+import { checkCampaignLimit } from '@/services/plan.service';
 
 export async function GET() {
   try {
@@ -30,6 +31,12 @@ export async function POST(req) {
     const rl = checkRateLimit(`campaign:create:${session.user.id}`, 10, 3600000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many campaigns created. Try again later.' }, { status: 429 });
+    }
+
+    // Check plan-based monthly campaign limit
+    const campaignLimitCheck = await checkCampaignLimit(session.user.id);
+    if (!campaignLimitCheck.allowed) {
+      return NextResponse.json({ error: campaignLimitCheck.reason }, { status: 403 });
     }
 
     const body = await req.json();

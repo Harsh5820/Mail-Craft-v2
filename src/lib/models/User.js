@@ -49,6 +49,14 @@ const UserSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+    resetPasswordExpire: {
+      type: Date,
+      default: null,
+    },
     // Professional profile — saved once, auto-filled in campaigns
     profile: {
       skills: { type: String, default: '' },
@@ -77,5 +85,9 @@ UserSchema.pre('save', async function () {
 UserSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+if (mongoose.models.User && !mongoose.models.User.schema.paths.resetPasswordToken) {
+  delete mongoose.models.User;
+}
 
 export default mongoose.models.User || mongoose.model('User', UserSchema);

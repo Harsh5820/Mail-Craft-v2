@@ -1,5 +1,7 @@
 import dbConnect from '@/lib/db';
 import User from '@/lib/models/User';
+import Template from '@/lib/models/Template';
+import Campaign from '@/lib/models/Campaign';
 
 /**
  * Plan configuration with pricing and limits
@@ -85,9 +87,6 @@ export async function resetDailySendCountIfNeeded(userId) {
  */
 export async function incrementDailySendCount(userId, increment = 1) {
   await dbConnect();
-
-  // Reset first if needed
-  await resetDailySendCountIfNeeded(userId);
 
   const user = await User.findByIdAndUpdate(
     userId,
@@ -208,4 +207,63 @@ export async function getPlanExpiryInfo(userId) {
     hoursRemaining: Math.max(0, Math.ceil(diff / (60 * 60 * 1000))),
     status: daysRemaining <= 0 ? 'expired' : daysRemaining <= 1 ? 'expiring_soon' : 'active',
   };
+}
+
+/**
+ * Check if user can create a new template
+ */
+export async function checkTemplateLimit(userId) {
+  await dbConnect();
+
+  let user = await checkAndDowngradePlan(userId);
+  if (!user) return { allowed: false, reason: 'User not found' };
+
+  const limits = PLAN_CONFIG[user.plan] || PLAN_CONFIG.free;
+  if (limits.templates === -1) return { allowed: true, plan: user.plan };
+
+  const count = await Template.countDocuments({ userId });
+  if (count >= limits.templates) {
+    return {
+      allowed: false,
+      reason: `Template limit reached (${limits.templates}) for ${limits.name} plan.`,
+      plan: user.plan,
+      limit: limits.templates,
+      current: count,
+    };
+  }
+
+  return { allowed: true, plan: user.plan, limit: limits.templates, current: count };
+}
+
+/**
+ * Check if user can create a new campaign
+ */
+export async function checkCampaignLimit(userId) {
+  await dbConnect();
+
+  let user = await checkAndDowngradePlan(userId);
+  if (!user) return { allowed: false, reason: 'User not found' };
+
+  const limits = PLAN_CONFIG[user.plan] || PLAN_CONFIG.free;
+  if (limits.campaignsPerMonth === -1) return { allowed: true, plan: user.plan };
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const count = await Campaign.countDocuments({
+    userId,
+    createdAt: { $gte: startOfMonth },
+  });
+
+  if (count >= limits.campaignsPerMonth) {
+    return {
+      allowed: false,
+      reason: `Monthly campaign limit reached (${limits.campaignsPerMonth}) for ${limits.name} plan.`,
+      plan: user.plan,
+      limit: limits.campaignsPerMonth,
+      current: count,
+    };
+  }
+
+  return { allowed: true, plan: user.plan, limit: limits.campaignsPerMonth, current: count };
 }

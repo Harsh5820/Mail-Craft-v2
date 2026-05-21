@@ -52,7 +52,7 @@ export async function updateRequestStatus(requestId, status) {
         plan: request.plan,
         planExpiresAt: expiresAt,
         dailySendCount: 0, // reset on upgrade
-        lastSendDate: new Date(),
+        lastSendDate: null,
       }
     }, { new: true });
 

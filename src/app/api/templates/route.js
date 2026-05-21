@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import * as templateService from '@/services/template.service';
 import { createTemplateSchema } from '@/schemas/template.schema';
 import { checkRateLimit } from '@/services/security.service';
+import { checkTemplateLimit } from '@/services/plan.service';
 import { z } from 'zod';
 
 export async function GET() {
@@ -31,6 +32,12 @@ export async function POST(req) {
     const rl = checkRateLimit(`template:${session.user.id}`, 30, 60000);
     if (!rl.allowed) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
+    // Check plan-based template limit
+    const templateLimitCheck = await checkTemplateLimit(session.user.id);
+    if (!templateLimitCheck.allowed) {
+      return NextResponse.json({ error: templateLimitCheck.reason }, { status: 403 });
     }
 
     const body = await req.json();

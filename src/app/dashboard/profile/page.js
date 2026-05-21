@@ -30,6 +30,42 @@ export default function ProfilePage() {
     headline: '',
   });
 
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    if (!planExpiresAt || plan === 'free') {
+      setTimeLeft('');
+      return;
+    }
+
+    const calculateTimeLeft = () => {
+      const difference = new Date(planExpiresAt).getTime() - Date.now();
+      if (difference <= 0) {
+        setTimeLeft('Expired');
+        // Trigger auto refresh to downgrade
+        fetchProfile();
+        return;
+      }
+
+      const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
+      const minutes = Math.floor((difference / 1000 / 60) % 60);
+      const seconds = Math.floor((difference / 1000) % 60);
+
+      let parts = [];
+      if (days > 0) parts.push(`${days}d`);
+      if (hours > 0 || days > 0) parts.push(`${hours}h`);
+      parts.push(`${minutes}m`);
+      parts.push(`${seconds}s`);
+
+      setTimeLeft(parts.join(' ') + ' left');
+    };
+
+    calculateTimeLeft();
+    const interval = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(interval);
+  }, [planExpiresAt, plan]);
+
   useEffect(() => {
     fetchProfile();
   }, []);
@@ -171,20 +207,20 @@ export default function ProfilePage() {
           )}
 
           {/* Expiry Info */}
-          {planInfo && plan !== 'free' && (
+          {planExpiresAt && plan !== 'free' && (
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="w-4 h-4 text-warning" />
-                <p className="text-xs font-medium text-surface-400">Expiry Date</p>
+                <Clock className="w-4 h-4 text-warning animate-pulse" />
+                <p className="text-xs font-medium text-surface-400">Time Remaining</p>
               </div>
-              <p className="text-lg font-bold text-surface-100">
-                {planInfo.daysRemaining} day{planInfo.daysRemaining !== 1 ? 's' : ''} left
+              <p className="text-lg font-black text-warning animate-pulse">
+                {timeLeft || 'Calculating...'}
               </p>
               <p className="text-xs text-surface-500 mt-1">
-                {new Date(planInfo.expiresAt).toLocaleString()}
+                Expiry: <span className="font-semibold text-surface-300">{new Date(planExpiresAt).toLocaleString()}</span>
               </p>
-              {planInfo.status === 'expiring_soon' && (
-                <p className="text-xs text-warning mt-2">⚠️ Expiring soon!</p>
+              {planInfo?.status === 'expiring_soon' && (
+                <p className="text-xs text-warning mt-2 font-semibold">⚠️ Expiring soon (under 24 hours)!</p>
               )}
             </div>
           )}

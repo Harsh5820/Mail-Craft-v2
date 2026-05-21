@@ -2,7 +2,7 @@ import Campaign from '@/lib/models/Campaign';
 import CampaignLog from '@/lib/models/CampaignLog';
 import User from '@/lib/models/User';
 import { createTransporter, renderTemplate, sendEmail, destroyTransporter } from './mail.service';
-import { canSendEmails, incrementDailySendCount, PLAN_CONFIG } from './plan.service';
+import { canSendEmails, incrementDailySendCount, PLAN_CONFIG, checkAndDowngradePlan, resetDailySendCountIfNeeded } from './plan.service';
 
 /**
  * In-memory active campaigns tracker.
@@ -74,11 +74,12 @@ async function processCampaign(campaignId, credentials, senderInfo) {
       throw new Error('Campaign or template not found');
     }
 
-    // Get user and check plan
-    const user = await User.findById(campaign.userId);
+    // Get user, check plan, and reset daily send count if needed (single prep check)
+    let user = await checkAndDowngradePlan(campaign.userId);
     if (!user) {
       throw new Error('User not found');
     }
+    user = await resetDailySendCountIfNeeded(campaign.userId);
 
     const template = campaign.templateId;
     const recipients = campaign.csvData;
@@ -119,13 +120,26 @@ async function processCampaign(campaignId, credentials, senderInfo) {
         await Campaign.findByIdAndUpdate(campaignId, { status: 'running' });
       }
 
-      // Check plan-based daily limit (enforced by plan service)
-      const canSend = await canSendEmails(campaign.userId, 1);
-      if (!canSend.canSend) {
+      // Check plan-based daily limit using local cached state (massive speedup!)
+      const limits = PLAN_CONFIG[user.plan] || PLAN_CONFIG.free;
+      
+      // Since anti-spam delays can cause campaigns to cross the 24h threshold,
+      // let's do a fast local timestamp check to see if we should reset user's daily count
+      const now = new Date();
+      const lastSend = user.lastSendDate ? new Date(user.lastSendDate) : null;
+      if (!lastSend || now.getTime() - lastSend.getTime() > 24 * 60 * 60 * 1000) {
+        user.dailySendCount = 0;
+        user.lastSendDate = now;
+        // Fast direct reset in DB
+        await User.findByIdAndUpdate(campaign.userId, { dailySendCount: 0, lastSendDate: now });
+      }
+
+      const remaining = limits.dailyEmails - user.dailySendCount;
+      if (remaining <= 0) {
         await Campaign.findByIdAndUpdate(campaignId, {
           status: 'paused',
           currentIndex: i,
-          errorMessage: canSend.reason || 'Daily email limit reached. Try tomorrow.',
+          errorMessage: `Daily email limit (${limits.dailyEmails}) reached for ${user.plan} plan. Try tomorrow.`,
         });
         break;
       }
@@ -179,8 +193,10 @@ async function processCampaign(campaignId, credentials, senderInfo) {
           attachments,
         });
 
-        // Increment daily send count
+        // Increment daily send count in DB and update local cache
         await incrementDailySendCount(campaign.userId, 1);
+        user.dailySendCount++;
+        user.lastSendDate = new Date();
 
         // Log success
         await CampaignLog.create({
