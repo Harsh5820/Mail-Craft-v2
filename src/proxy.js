@@ -13,6 +13,7 @@ export async function proxy(request) {
       return NextResponse.redirect(loginUrl);
     }
   }
+  
 
   // Redirect logged-in users away from auth pages
   if (pathname === '/login' || pathname === '/register') {
