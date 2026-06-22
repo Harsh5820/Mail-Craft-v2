@@ -11,13 +11,6 @@ import { canSendEmails, incrementDailySendCount, PLAN_CONFIG, checkAndDowngradeP
 const activeCampaigns = new Map();
 
 /**
- * Random integer between min and max (inclusive)
- */
-function randomBetween(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-/**
  * Sleep for given milliseconds
  */
 function sleep(ms) {
@@ -26,15 +19,12 @@ function sleep(ms) {
 
 /**
  * Anti-spam configuration
+ * Fixed 3000ms delay between consecutive emails (sequential, non-cumulative).
+ * Email 1 is sent immediately; every subsequent email waits exactly 3000ms.
  */
 const ANTI_SPAM = {
-  batchSize: { min: 3, max: 5 },           // Emails per batch
-  delayBetweenEmails: { min: 30, max: 90 }, // Seconds between emails in a batch
-  delayBetweenBatches: { min: 3, max: 7 },  // Minutes between batches
-  cooldownAfter: 20,                         // Cooldown after N emails
-  cooldownDuration: { min: 15, max: 30 },   // Minutes for cooldown
-  dailyLimit: 80,                            // Safe daily limit for Gmail
-  maxRetries: 2,                             // Max retries per email
+  delayBetweenEmails: 3000, // Fixed 3 seconds between emails (not per index)
+  dailyLimit: 80,           // Safe daily session limit for Gmail
 };
 
 /**
@@ -85,6 +75,9 @@ async function processCampaign(campaignId, credentials, senderInfo) {
     const recipients = campaign.csvData;
     const startIndex = campaign.currentIndex || 0;
     let sentInSession = 0;
+    // Track whether this is the very first send attempt in this session.
+    // Email 1 is sent immediately; every subsequent email waits ANTI_SPAM.delayBetweenEmails ms.
+    let isFirstEmail = true;
 
     // Update status to running
     await Campaign.findByIdAndUpdate(campaignId, {
@@ -155,6 +148,15 @@ async function processCampaign(campaignId, credentials, senderInfo) {
       }
 
       const recipient = recipients[i];
+
+      // ===== ANTI-SPAM FIXED DELAY =====
+      // Email 1 is sent immediately. Every subsequent email waits exactly 3000ms before sending.
+      // Delay is checked here (before the send attempt) so failures/retries do NOT accumulate extra time.
+      if (isFirstEmail) {
+        isFirstEmail = false;
+      } else {
+        await sleep(ANTI_SPAM.delayBetweenEmails);
+      }
 
       try {
         // Render email
@@ -234,34 +236,6 @@ async function processCampaign(campaignId, credentials, senderInfo) {
           currentIndex: i + 1,
           pendingCount: recipients.length - (i + 1),
         });
-      }
-
-      // ===== ANTI-SPAM DELAYS =====
-
-      // Delay between emails in batch
-      const emailDelay = randomBetween(
-        ANTI_SPAM.delayBetweenEmails.min * 1000,
-        ANTI_SPAM.delayBetweenEmails.max * 1000
-      );
-      await sleep(emailDelay);
-
-      // Batch break
-      const batchSize = randomBetween(ANTI_SPAM.batchSize.min, ANTI_SPAM.batchSize.max);
-      if (sentInSession > 0 && sentInSession % batchSize === 0) {
-        const batchDelay = randomBetween(
-          ANTI_SPAM.delayBetweenBatches.min * 60 * 1000,
-          ANTI_SPAM.delayBetweenBatches.max * 60 * 1000
-        );
-        await sleep(batchDelay);
-      }
-
-      // Cooldown after N emails
-      if (sentInSession > 0 && sentInSession % ANTI_SPAM.cooldownAfter === 0) {
-        const cooldown = randomBetween(
-          ANTI_SPAM.cooldownDuration.min * 60 * 1000,
-          ANTI_SPAM.cooldownDuration.max * 60 * 1000
-        );
-        await sleep(cooldown);
       }
     }
 

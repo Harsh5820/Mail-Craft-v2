@@ -60,6 +60,27 @@ export async function checkAndDowngradePlan(userId) {
 }
 
 /**
+ * Centralized active premium plan check.
+ * Returns true only when the user has a non-free plan that has NOT expired.
+ * This is the single authoritative function for premium access decisions.
+ * Used by: recruiter email access, upgrade payment blocking, profile plan display.
+ *
+ * @param {string} userId - MongoDB ObjectId string
+ * @returns {Promise<boolean>}
+ */
+export async function isActivePremiumUser(userId) {
+  await dbConnect();
+
+  // checkAndDowngradePlan handles expiry-based auto-downgrade, so we query fresh
+  const user = await checkAndDowngradePlan(userId);
+  if (!user) return false;
+
+  // Plan must be non-free AND not expired (checkAndDowngradePlan already reset expired plans to free)
+  return user.plan !== 'free';
+}
+
+
+/**
  * Reset daily email count if 24 hours have passed
  */
 export async function resetDailySendCountIfNeeded(userId) {

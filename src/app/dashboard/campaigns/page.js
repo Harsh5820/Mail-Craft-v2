@@ -49,15 +49,15 @@ export default function CampaignsPage() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this campaign and all its logs?')) return;
+  const handleDelete = async (id, name) => {
+    if (!confirm(`Delete campaign "${name}" and all its logs? This cannot be undone.`)) return;
     try {
       const res = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error);
       }
-      showToast('Campaign deleted');
+      showToast(`Campaign "${name}" deleted`);
       fetchCampaigns();
     } catch (err) {
       showToast(err.message || 'Failed to delete', 'error');
@@ -145,7 +145,7 @@ export default function CampaignsPage() {
                       </button>
                     )}
                     {(c.status !== 'running') && (
-                      <button onClick={() => handleDelete(c._id)} className="btn btn-ghost btn-sm text-danger" title="Delete">
+                      <button onClick={() => handleDelete(c._id, c.name)} className="btn btn-ghost btn-sm text-danger" title="Delete">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}

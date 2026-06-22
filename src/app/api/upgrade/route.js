@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import dbConnect from '@/lib/db';
 import PlanRequest from '@/lib/models/PlanRequest';
+import { isActivePremiumUser } from '@/services/plan.service';
 
 export async function POST(req) {
   try {
@@ -23,6 +24,15 @@ export async function POST(req) {
 
     await dbConnect();
 
+    // Block purchase if the user already has an active premium plan
+    const alreadyPremium = await isActivePremiumUser(session.user.id);
+    if (alreadyPremium) {
+      return NextResponse.json(
+        { error: 'You already have an active premium plan. You cannot purchase another plan until your current plan expires.' },
+        { status: 400 }
+      );
+    }
+
     // Check if there is already a pending request
     const existing = await PlanRequest.findOne({ userId: session.user.id, status: 'pending' });
     if (existing) {
@@ -41,6 +51,7 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Failed to submit upgrade request' }, { status: 500 });
   }
 }
+
 
 export async function GET(req) {
   try {
