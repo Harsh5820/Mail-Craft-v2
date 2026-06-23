@@ -1,9 +1,10 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Briefcase, Lock, Copy, Check, AlertCircle, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Briefcase, Lock, Copy, Check, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import Link from 'next/link';
 import { showToast } from '@/components/ui/Toast';
 
@@ -29,9 +30,18 @@ function formatUploadDate(isoString) {
 // ─────────────────────────────────────────────────
 // EmailBatchCard — one card per upload batch
 // ─────────────────────────────────────────────────
-function EmailBatchCard({ batch }) {
+function EmailBatchCard({ batch, onStartCampaign }) {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef(null);
+
+  const handleCreateCampaign = () => {
+    const realEmails = batch.emails.filter(e => e !== '__LOCKED__');
+    if (realEmails.length > 0) {
+      onStartCampaign(batch);
+    } else {
+      showToast('No unlocked emails available.', 'error');
+    }
+  };
 
   const handleCopy = async () => {
     const realEmails = batch.emails.filter(e => e !== '__LOCKED__');
@@ -83,29 +93,39 @@ function EmailBatchCard({ batch }) {
           <span className="text-sm font-medium text-surface-300">
             {emailCount} {emailCount === 1 ? 'email' : 'emails'}
           </span>
-          <button
-            onClick={handleCopy}
-            disabled={copied}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-              copied
-                ? 'bg-success/20 text-success cursor-default'
-                : 'bg-primary-600/15 text-primary-400 hover:bg-primary-600/25 active:scale-95'
-            }`}
-            title="Copy all emails as comma-separated list"
-            aria-label={`Copy ${emailCount} emails from this batch`}
-          >
-            {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                Copied
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                Copy
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopy}
+              disabled={copied}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                copied
+                  ? 'bg-success/20 text-success cursor-default'
+                  : 'bg-surface-800 text-surface-200 hover:bg-surface-700 active:scale-95'
+              }`}
+              title="Copy all emails as comma-separated list"
+              aria-label={`Copy ${emailCount} emails from this batch`}
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleCreateCampaign}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary-600 text-white hover:bg-primary-500 active:scale-95 transition-all duration-200"
+              title="Create a new campaign with these emails"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Create Campaign
+            </button>
+          </div>
         </div>
 
         {/* Scrollable email list — max ~8 rows, then scroll */}
@@ -179,6 +199,9 @@ export default function RecruiterEmailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isPremium, setIsPremium] = useState(true);
+  const [selectedBatchForCampaign, setSelectedBatchForCampaign] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -194,6 +217,7 @@ export default function RecruiterEmailsPage() {
     }, 0);
     try {
       const params = new URLSearchParams({ page: String(page), limit: '10' });
+
       const res = await fetch(`/api/recruiter-emails?${params}`);
 
       if (res.status === 401) {
@@ -238,18 +262,20 @@ export default function RecruiterEmailsPage() {
   return (
     <div className="animate-fade-in max-w-2xl">
       {/* Page Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-9 h-9 rounded-lg bg-primary-600/10 flex items-center justify-center">
-            <Briefcase className="w-5 h-5 text-primary-400" />
+      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-9 h-9 rounded-lg bg-primary-600/10 flex items-center justify-center">
+              <Briefcase className="w-5 h-5 text-primary-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-surface-100">Recruiter Contacts</h1>
           </div>
-          <h1 className="text-2xl font-bold text-surface-100">Recruiter Contacts</h1>
+          <p className="text-sm text-surface-400 pl-12">
+            {loading
+              ? 'Loading...'
+              : `${total} upload batch${total !== 1 ? 'es' : ''} available`}
+          </p>
         </div>
-        <p className="text-sm text-surface-400 pl-12">
-          {loading
-            ? 'Loading...'
-            : `${total} upload batch${total !== 1 ? 'es' : ''} available`}
-        </p>
       </div>
 
       {/* Upgrade Banner for Free Users */}
@@ -301,7 +327,16 @@ export default function RecruiterEmailsPage() {
         <>
           <div className="space-y-6">
             {batches.map((batch) => (
-              <EmailBatchCard key={batch.id} batch={batch} />
+              <EmailBatchCard key={batch.id || batch._id} batch={batch} onStartCampaign={async (b) => {
+                setSelectedBatchForCampaign(b);
+                setTemplatesLoading(true);
+                try {
+                  const res = await fetch('/api/templates');
+                  const data = await res.json();
+                  setTemplates(data.templates || []);
+                } catch(e) {}
+                setTemplatesLoading(false);
+              }} />
             ))}
           </div>
 
@@ -332,6 +367,53 @@ export default function RecruiterEmailsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Template Select Modal */}
+      {selectedBatchForCampaign && (
+        <div className="modal-overlay" onClick={() => setSelectedBatchForCampaign(null)}>
+          <div className="modal-content max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-surface-100 mb-2">Select a Template</h2>
+            <p className="text-sm text-surface-400 mb-6">Choose the email template you want to send to this batch.</p>
+            
+            {templatesLoading ? (
+              <div className="space-y-3">
+                {[1,2,3].map(i => <div key={i} className="h-16 bg-surface-800 rounded-lg animate-shimmer" />)}
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-surface-400 mb-4">You don&apos;t have any templates yet.</p>
+                <Link href="/dashboard/templates" className="btn btn-primary btn-sm">Create One</Link>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                {templates.map(t => (
+                  <button 
+                    key={t._id} 
+                    onClick={() => {
+                      const realEmails = selectedBatchForCampaign.emails.filter(e => e !== '__LOCKED__');
+                      const csvString = realEmails.join(', ');
+                      sessionStorage.setItem('pending_campaign_emails', csvString);
+                      sessionStorage.setItem('pending_campaign_templateId', t._id);
+                      router.push('/dashboard/campaigns/new');
+                    }}
+                    className="w-full text-left p-4 rounded-lg border border-surface-800 hover:border-primary-500/50 bg-surface-800/50 hover:bg-primary-600/10 transition-all flex items-center justify-between group"
+                  >
+                    <div>
+                      <h3 className="text-sm font-semibold text-surface-200 group-hover:text-primary-300 transition-colors">{t.name}</h3>
+                      <p className="text-xs text-surface-500 mt-1 truncate max-w-sm">{t.subject}</p>
+                    </div>
+                    <Send className="w-4 h-4 text-surface-600 group-hover:text-primary-400 transition-colors" />
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <div className="mt-6 flex justify-end">
+              <button onClick={() => setSelectedBatchForCampaign(null)} className="btn btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

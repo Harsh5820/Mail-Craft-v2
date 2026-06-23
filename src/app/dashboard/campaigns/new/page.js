@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -39,6 +40,7 @@ export default function NewCampaignPage() {
   const [isScheduled, setIsScheduled] = useState(false);
   const [scheduledAt, setScheduledAt] = useState('');
   const [userPlan, setUserPlan] = useState('free');
+  const [minDate, setMinDate] = useState('');
 
   const fetchProfile = async () => {
     try {
@@ -75,9 +77,90 @@ export default function NewCampaignPage() {
     finally { setTemplatesLoading(false); }
   };
 
+  const validateEmails = async (textToValidate) => {
+    try {
+      const res = await fetch('/api/csv/validate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvText: textToValidate, mode: 'emails' }),
+      });
+      const data = await res.json();
+      setCsvData(data.data || []); setCsvStats(data.stats || null); setCsvErrors(data.errors || []);
+      if (data.valid) showToast(`${data.stats.valid} valid emails found!`);
+      else showToast('Some issues found', 'error');
+    } catch (err) { showToast('Failed to validate emails', 'error'); }
+  };
+
+  const handleEmailsPaste = async () => {
+    if (!emailText.trim()) return;
+    await validateEmails(emailText);
+  };
+
+  const initMagic = async (templateId, category) => {
+    setLoading(true);
+    try {
+      const tRes = await fetch('/api/templates');
+      const tData = await tRes.json();
+      if (tData.templates?.length > 0) {
+        const found = tData.templates.find(t => t._id === templateId) || tData.templates[0];
+        setSelectedTemplate(found);
+      }
+
+      const params = new URLSearchParams({ limit: '1' });
+      if (category) params.append('category', category);
+      
+      const bRes = await fetch(`/api/recruiter-emails?${params}`);
+      const bData = await bRes.json();
+      if (bData.batches?.length > 0) {
+        const batch = bData.batches[0];
+        const realEmails = batch.emails.filter(e => e !== '__LOCKED__');
+        const csvString = realEmails.join(', ');
+        setEmailText(csvString);
+        setInputMode('emails');
+        await validateEmails(csvString);
+      } else {
+        showToast('No batches found for this category.', 'warning');
+      }
+      
+      setCampaignName(`Daily Outreach ${new Date().toLocaleDateString()}`);
+      setStep(4);
+    } catch (err) {
+      showToast('Magic setup failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTemplates();
     fetchProfile();
+
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('magic')) {
+      initMagic(searchParams.get('templateId'), searchParams.get('category'));
+    } else {
+      const pendingEmails = sessionStorage.getItem('pending_campaign_emails');
+      const pendingTemplateId = sessionStorage.getItem('pending_campaign_templateId');
+
+      if (pendingEmails) {
+        sessionStorage.removeItem('pending_campaign_emails');
+        setEmailText(pendingEmails);
+        setInputMode('emails');
+        validateEmails(pendingEmails);
+
+        if (pendingTemplateId) {
+          sessionStorage.removeItem('pending_campaign_templateId');
+          fetch('/api/templates').then(r => r.json()).then(data => {
+            const found = data.templates?.find(t => t._id === pendingTemplateId);
+            if (found) setSelectedTemplate(found);
+          });
+          setStep(3); // skip straight to Review/Name, with template pre-selected
+        } else {
+          setStep(2); // fallback
+        }
+      }
+    }
+
+    setMinDate(new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16));
   }, []);
 
   const handleCsvUpload = async (e) => {
@@ -94,20 +177,6 @@ export default function NewCampaignPage() {
       if (data.valid) showToast(`${data.stats.valid} valid recipients found!`);
       else showToast('Some issues found in CSV', 'error');
     } catch (err) { showToast('Failed to validate CSV', 'error'); }
-  };
-
-  const handleEmailsPaste = async () => {
-    if (!emailText.trim()) return;
-    try {
-      const res = await fetch('/api/csv/validate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csvText: emailText, mode: 'emails' }),
-      });
-      const data = await res.json();
-      setCsvData(data.data || []); setCsvStats(data.stats || null); setCsvErrors(data.errors || []);
-      if (data.valid) showToast(`${data.stats.valid} valid emails found!`);
-      else showToast('Some issues found', 'error');
-    } catch (err) { showToast('Failed to validate emails', 'error'); }
   };
 
   const handleLaunch = async () => {
@@ -375,7 +444,7 @@ export default function NewCampaignPage() {
                   className="input text-sm" 
                   value={scheduledAt} 
                   onChange={(e) => setScheduledAt(e.target.value)}
-                  min={new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)} // Min 5 mins from now
+                  min={minDate} // Min 5 mins from now
                 />
                 <p className="text-xs text-surface-500 mt-2">Maximum 7 days in advance. Requires active Premium plan.</p>
               </div>

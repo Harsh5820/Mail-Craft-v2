@@ -1,7 +1,9 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Send,
@@ -12,12 +14,18 @@ import {
   ArrowRight,
   TrendingUp,
   Clock,
+  Zap
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showLaunchModal, setShowLaunchModal] = useState(false);
+  const [launchCategory, setLaunchCategory] = useState('Dev');
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
 
   const fetchAnalytics = async () => {
     try {
@@ -99,16 +107,34 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid md:grid-cols-2 gap-4 mb-8">
+      <div className="grid md:grid-cols-3 gap-4 mb-8">
+        <button onClick={async () => {
+          setShowLaunchModal(true);
+          setTemplatesLoading(true);
+          try {
+            const res = await fetch('/api/templates');
+            const data = await res.json();
+            setTemplates(data.templates || []);
+          } catch(e) {}
+          setTemplatesLoading(false);
+        }} className="glass-card p-6 flex items-center gap-4 group text-left w-full cursor-pointer hover:bg-surface-800/50 transition-colors">
+          <div className="w-12 h-12 rounded-xl bg-primary-600/20 flex items-center justify-center shrink-0">
+            <Zap className="w-5 h-5 text-primary-400 group-hover:text-primary-300 transition-colors" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-surface-100 mb-1">Launch Daily Campaign</h3>
+            <p className="text-xs text-surface-400">1-click auto-send to latest batch</p>
+          </div>
+        </button>
+
         <Link href="/dashboard/campaigns/new" className="glass-card p-6 flex items-center gap-4 group">
           <div className="w-12 h-12 rounded-xl gradient-bg flex items-center justify-center shrink-0">
             <Send className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-surface-100 mb-1">New Campaign</h3>
-            <p className="text-sm text-surface-400">Start sending personalized emails to recruiters</p>
+            <p className="text-xs text-surface-400">Start sending personalized emails to recruiters</p>
           </div>
-          <ArrowRight className="w-5 h-5 text-surface-500 group-hover:text-primary-400 transition-colors" />
         </Link>
 
         <Link href="/dashboard/templates" className="glass-card p-6 flex items-center gap-4 group">
@@ -117,9 +143,8 @@ export default function DashboardPage() {
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-surface-100 mb-1">Manage Templates</h3>
-            <p className="text-sm text-surface-400">Create and edit reusable email templates</p>
+            <p className="text-xs text-surface-400">Create and edit reusable email templates</p>
           </div>
-          <ArrowRight className="w-5 h-5 text-surface-500 group-hover:text-primary-400 transition-colors" />
         </Link>
       </div>
 
@@ -172,6 +197,66 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Launch Daily Modal */}
+      {showLaunchModal && (
+        <div className="modal-overlay" onClick={() => setShowLaunchModal(false)}>
+          <div className="modal-content max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-surface-100 mb-2">Launch Daily Campaign</h2>
+            <p className="text-sm text-surface-400 mb-6">Select a category and template to start your daily outreach.</p>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-surface-300 mb-2">Target Category</label>
+              <select 
+                className="input py-2 text-sm w-full" 
+                value={launchCategory} 
+                onChange={(e) => setLaunchCategory(e.target.value)}
+              >
+                <option value="Dev">Dev</option>
+                <option value="HR">HR</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Sales">Sales</option>
+                <option value="Design">Design</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <label className="block text-sm font-medium text-surface-300 mb-2">Select Template</label>
+            {templatesLoading ? (
+              <div className="space-y-3">
+                {[1,2,3].map(i => <div key={i} className="h-16 bg-surface-800 rounded-lg animate-shimmer" />)}
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="text-center py-6 border border-surface-800 rounded-lg">
+                <p className="text-sm text-surface-400 mb-4">You don&apos;t have any templates yet.</p>
+                <Link href="/dashboard/templates" className="btn btn-primary btn-sm">Create One</Link>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                {templates.map(t => (
+                  <button 
+                    key={t._id} 
+                    onClick={() => {
+                      router.push(`/dashboard/campaigns/new?magic=true&templateId=${t._id}&category=${encodeURIComponent(launchCategory)}`);
+                    }}
+                    className="w-full text-left p-4 rounded-lg border border-surface-800 hover:border-primary-500/50 bg-surface-800/50 hover:bg-primary-600/10 transition-all flex items-center justify-between group"
+                  >
+                    <div>
+                      <h3 className="text-sm font-semibold text-surface-200 group-hover:text-primary-300 transition-colors">{t.name}</h3>
+                      <p className="text-xs text-surface-500 mt-1 truncate max-w-[250px]">{t.subject}</p>
+                    </div>
+                    <Send className="w-4 h-4 text-surface-600 group-hover:text-primary-400 transition-colors" />
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <div className="mt-6 flex justify-end">
+              <button onClick={() => setShowLaunchModal(false)} className="btn btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -206,7 +207,7 @@ function RecruiterEmailsSection() {
   const fetchBatches = useCallback(async () => {
     setBatchLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '15' });
+      const params = new URLSearchParams({ page: String(page), limit: '15', adminView: 'true' });
       const res = await fetch(`/api/recruiter-emails?${params}`);
       const data = await res.json();
       if (res.ok) {

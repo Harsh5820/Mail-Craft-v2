@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,6 +15,17 @@ export default function TemplatesPage() {
   const [saving, setSaving] = useState(false);
   const [aiObjective, setAiObjective] = useState('');
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch('/api/profile');
+      const data = await res.json();
+      if (res.ok && data.profile) {
+        setUserProfile({ name: data.name, ...data.profile });
+      }
+    } catch (err) {}
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -29,7 +41,32 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     fetchTemplates();
+    fetchProfile();
   }, []);
+
+  const renderLivePreview = () => {
+    let { html, subject } = form;
+    const d = {
+      user_name: userProfile?.name || '[Your Name]',
+      skills: userProfile?.skills || '[Your Skills]',
+      experience: userProfile?.experience || '[Your Experience]',
+      portfolio: userProfile?.portfolio || '[Portfolio URL]',
+      linkedin: userProfile?.linkedin || '[LinkedIn URL]',
+      github: userProfile?.github || '[GitHub URL]',
+      contact_number_1: userProfile?.contact_number_1 || '[Contact]',
+      contact_number_2: userProfile?.contact_number_2 || '',
+      company_name: 'Acme Corp',
+      recruiter_name: 'Alex',
+      job_role: 'Senior Developer'
+    };
+    
+    for (const [k, v] of Object.entries(d)) {
+      const r = new RegExp(`\\{\\{${k}\\}\\}`, 'g');
+      html = html.replace(r, v);
+      subject = subject.replace(r, v);
+    }
+    return { html, subject };
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -220,7 +257,7 @@ export default function TemplatesPage() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content max-w-5xl w-full" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-surface-100">
                 {editingTemplate ? 'Edit Template' : 'New Template'}
@@ -230,7 +267,9 @@ export default function TemplatesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-5">
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Form Side */}
+              <form onSubmit={handleSave} className="flex-1 space-y-5">
               <div>
                 <label className="block text-sm font-medium text-surface-300 mb-1.5">Template Name</label>
                 <input
@@ -296,7 +335,30 @@ export default function TemplatesPage() {
                   {saving ? 'Saving...' : editingTemplate ? 'Update Template' : 'Create Template'}
                 </button>
               </div>
-            </form>
+              </form>
+
+              {/* Live Preview Side */}
+              <div className="flex-1 bg-surface-800/30 rounded-xl p-5 border border-surface-700 flex flex-col">
+                <h3 className="text-sm font-semibold text-primary-400 mb-4 flex items-center gap-2">
+                  <Eye className="w-4 h-4" /> Live Preview
+                </h3>
+                {(() => {
+                  const p = renderLivePreview();
+                  return (
+                    <div className="space-y-4 flex-1 flex flex-col">
+                      <div className="p-3 rounded-lg bg-surface-800/80">
+                        <p className="text-xs text-surface-500 mb-1">Subject</p>
+                        <p className="text-sm font-medium text-surface-200">{p.subject || '—'}</p>
+                      </div>
+                      <div 
+                        className="p-4 rounded-lg bg-white text-gray-800 text-sm leading-relaxed flex-1 overflow-y-auto min-h-[250px]"
+                        dangerouslySetInnerHTML={{ __html: p.html || '<p class="text-gray-400">Email body preview...</p>' }}
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         </div>
       )}

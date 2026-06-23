@@ -22,13 +22,23 @@ export async function GET(req) {
     }
 
     const isAdmin = session.user.role === 'admin';
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const category = searchParams.get('category') || null;
+    const wantsAdminView = searchParams.get('adminView') === 'true';
+
+    // Even if they are an admin, they might be using the normal UI.
+    // Only fetch unfiltered admin batches if they explicitly ask for adminView.
+    const isActuallyAdminView = isAdmin && wantsAdminView;
+
     let isPremium = false;
     let interests = [];
 
-    // Non-admin users fetch premium status and interests
-    if (!isAdmin) {
+    // Fetch premium status and interests for normal view (or if not adminView)
+    if (!isActuallyAdminView) {
       isPremium = await isActivePremiumUser(session.user.id);
-      // Fetch user interests
+      
       const mongoose = await import('mongoose');
       const User = mongoose.models.User || mongoose.model('User');
       const user = await User.findById(session.user.id).select('profile.interests').lean();
@@ -37,14 +47,10 @@ export async function GET(req) {
       }
     }
 
-    const { searchParams } = new URL(req.url);
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
-
-    // Admin gets full batch data (for management UI); premium/free gets filtered public shape
-    const result = isAdmin
+    // Admin view gets full batch data (for management UI); normal view gets filtered public shape
+    const result = isActuallyAdminView
       ? await recruiterService.getBatchesForAdmin(page, limit)
-      : await recruiterService.getBatchesForPremium(page, limit, isPremium, interests);
+      : await recruiterService.getBatchesForPremium(page, limit, isPremium, interests, category);
 
     if (isAdmin) {
       result.isPremium = true;

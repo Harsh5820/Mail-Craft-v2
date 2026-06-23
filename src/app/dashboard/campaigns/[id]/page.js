@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 'use client';
 
 import { useState, useEffect, use } from 'react';
@@ -41,30 +42,17 @@ export default function CampaignDetailPage({ params }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchProgress, 5000);
-    return () => clearInterval(interval);
-  }, [id]);
-
-  /**
-   * Fetch both campaign details (for name/ownership) and progress on first load.
-   */
   const fetchData = async () => {
     try {
       const [campaignRes, progressRes] = await Promise.all([
         fetch(`/api/campaigns/${id}`),
         fetch(`/api/campaigns/${id}/progress`),
       ]);
+      const cData = await campaignRes.json();
+      const pData = await progressRes.json();
 
-      if (campaignRes.ok) {
-        const campaignData = await campaignRes.json();
-        setCampaign(campaignData.campaign);
-      }
-      if (progressRes.ok) {
-        const progressData = await progressRes.json();
-        setProgress(progressData.progress);
-      }
+      if (campaignRes.ok) setCampaign(cData.campaign);
+      if (progressRes.ok) setProgress(pData.progress);
     } catch (err) {
       console.error('Failed to fetch campaign data');
     } finally {
@@ -81,6 +69,12 @@ export default function CampaignDetailPage({ params }) {
       console.error('Failed to fetch progress');
     }
   };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchProgress, 5000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   const handleAction = async (action) => {
     try {

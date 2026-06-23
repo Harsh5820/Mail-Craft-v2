@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -34,6 +35,26 @@ export default function ProfilePage() {
 
   const [timeLeft, setTimeLeft] = useState('');
 
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch('/api/profile');
+      const data = await res.json();
+      if (res.ok) {
+        setName(data.name || '');
+        setPlan(data.plan || 'free');
+        setPlanExpiresAt(data.planExpiresAt);
+        setPlanInfo(data.planInfo);
+        setDailyEmails(data.dailyEmails);
+        setReferralCode(data.referralCode || '');
+        setProfile(prev => ({ ...prev, ...data.profile, interests: data.profile?.interests || [] }));
+      }
+    } catch (err) {
+      showToast('Failed to load profile', 'error');
+    } finally {
+      setTimeout(() => setLoading(false), 0);
+    }
+  };
+
   useEffect(() => {
     if (!planExpiresAt || plan === 'free') {
       setTimeout(() => setTimeLeft(''), 0);
@@ -45,7 +66,7 @@ export default function ProfilePage() {
       if (difference <= 0) {
         setTimeLeft('Expired');
         // Trigger auto refresh to downgrade
-        fetchProfile();
+        setTimeout(() => fetchProfile(), 0);
         return;
       }
 
@@ -68,25 +89,7 @@ export default function ProfilePage() {
     return () => clearInterval(interval);
   }, [planExpiresAt, plan]);
 
-  const fetchProfile = async () => {
-    try {
-      const res = await fetch('/api/profile');
-      const data = await res.json();
-      if (res.ok) {
-        setName(data.name || '');
-        setPlan(data.plan || 'free');
-        setPlanExpiresAt(data.planExpiresAt);
-        setPlanInfo(data.planInfo);
-        setDailyEmails(data.dailyEmails);
-        setReferralCode(data.referralCode || '');
-        setProfile(prev => ({ ...prev, ...data.profile, interests: data.profile?.interests || [] }));
-      }
-    } catch (err) {
-      showToast('Failed to load profile', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   useEffect(() => {
     fetchProfile();

@@ -224,9 +224,10 @@ export async function getBatchesForAdmin(page = 1, limit = 20) {
  *
  * @param {number} page - 1-based page
  * @param {number} limit - batches per page
+ * @param {string} explicitCategory - Strictly filter by category, overriding interests
  * @returns {{ batches: Array, total: number, page: number, totalPages: number }}
  */
-export async function getBatchesForPremium(page = 1, limit = 20, isPremium = false, interests = []) {
+export async function getBatchesForPremium(page = 1, limit = 20, isPremium = false, interests = [], explicitCategory = null) {
   await dbConnect();
 
   const safeLimit = Math.min(Math.max(1, limit), 50);
@@ -237,9 +238,15 @@ export async function getBatchesForPremium(page = 1, limit = 20, isPremium = fal
   const query = { emailCount: { $gt: 0 } };
 
   // Filter by interests if provided
-  if (interests && interests.length > 0) {
-    // If interests provided, allow those categories, plus 'Other' to be safe
-    query.category = { $in: [...interests, 'Other'] };
+  if (explicitCategory) {
+    query.category = explicitCategory;
+  } else if (interests && interests.length > 0) {
+    // Strictly filter by what user selected
+    query.category = { $in: interests };
+  } else {
+    // If user has no interests selected, only show 'Other' batches (or default fallback) 
+    // rather than exposing everything
+    query.category = 'Other';
   }
 
   const [batches, total] = await Promise.all([
