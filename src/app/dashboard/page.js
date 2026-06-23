@@ -19,10 +19,6 @@ export default function DashboardPage() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
   const fetchAnalytics = async () => {
     try {
       const res = await fetch('/api/analytics');
@@ -34,6 +30,10 @@ export default function DashboardPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, []);
 
   const stats = [
     {
@@ -74,7 +74,7 @@ export default function DashboardPage() {
           Welcome back, {session?.user?.name?.split(' ')[0] || 'there'} 👋
         </h1>
         <p className="text-surface-400 text-sm">
-          Here's an overview of your email campaigns.
+          Here&apos;s an overview of your email campaigns.
         </p>
       </div>
 

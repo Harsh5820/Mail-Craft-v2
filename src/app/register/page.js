@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -8,9 +8,18 @@ import { Mail, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', referralCode: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Check for ?ref= parameter in URL
+    const searchParams = new URLSearchParams(window.location.search);
+    const refCode = searchParams.get('ref');
+    if (refCode) {
+      setTimeout(() => setForm((prev) => ({ ...prev, referralCode: refCode })), 0);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,6 +40,7 @@ export default function RegisterPage() {
           name: form.name,
           email: form.email,
           password: form.password,
+          referralCode: form.referralCode || undefined,
         }),
       });
 
@@ -132,6 +142,18 @@ export default function RegisterPage() {
                 onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-surface-300 mb-1.5">Referral Code (Optional)</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Got a referral code?"
+                value={form.referralCode}
+                onChange={(e) => setForm({ ...form, referralCode: e.target.value })}
+              />
+              <p className="text-[10px] text-surface-500 mt-1">Enter a code to support a friend.</p>
             </div>
 
             <button type="submit" className="btn btn-primary w-full btn-lg" disabled={loading}>

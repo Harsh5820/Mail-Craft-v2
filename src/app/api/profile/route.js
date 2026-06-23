@@ -5,6 +5,12 @@ import dbConnect from '@/lib/db';
 import User from '@/lib/models/User';
 import { checkAndDowngradePlan, getPlanExpiryInfo, getRemainingDailyEmails, PLAN_CONFIG } from '@/services/plan.service';
 
+function generateReferralCode(name) {
+  const prefix = (name || 'USER').replace(/[^a-zA-Z0-9]/g, '').substring(0, 4).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `${prefix}${random}`;
+}
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -24,9 +30,24 @@ export async function GET() {
     const planInfo = await getPlanExpiryInfo(session.user.id);
     const dailyEmails = await getRemainingDailyEmails(session.user.id);
 
+    // Auto-generate referral code for legacy users who don't have one
+    let currentReferralCode = user.referralCode;
+    if (!currentReferralCode) {
+      let newReferralCode = generateReferralCode(user.name);
+      let codeExists = await User.findOne({ referralCode: newReferralCode });
+      while (codeExists) {
+        newReferralCode = generateReferralCode(user.name);
+        codeExists = await User.findOne({ referralCode: newReferralCode });
+      }
+      user.referralCode = newReferralCode;
+      await user.save();
+      currentReferralCode = newReferralCode;
+    }
+
     return NextResponse.json({
       name: user.name,
       email: user.email,
+      referralCode: currentReferralCode,
       profile: user.profile || {},
       plan: user.plan || 'free',
       planInfo,
@@ -74,6 +95,12 @@ export async function PUT(req) {
           cleanProfile[key] = typeof profile[key] === 'string' ? profile[key].trim() : profile[key];
         }
       }
+      
+      // Handle interests array
+      if (Array.isArray(profile.interests)) {
+        cleanProfile.interests = profile.interests.map(i => String(i).trim()).filter(Boolean);
+      }
+
       // Save the whole profile object so Mongoose creates it if it doesn't exist
       updateData.profile = cleanProfile;
     }
@@ -82,7 +109,7 @@ export async function PUT(req) {
       session.user.id,
       { $set: updateData },
       { new: true, runValidators: true }
-    ).select('name email profile').lean();
+    ).select('name email profile referralCode').lean();
 
     return NextResponse.json({
       message: 'Profile updated successfully',

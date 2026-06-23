@@ -15,7 +15,6 @@ export const createCampaignSchema = z.object({
     }).passthrough()
   ).min(1, 'At least one recipient is required'),
   resumeFileName: z.string().optional().default(''),
-  resumeBase64: z.string().optional().default(''),
 }).passthrough();
 
 export const startCampaignSchema = z.object({
@@ -27,4 +26,7 @@ export const startCampaignSchema = z.object({
   portfolio: z.string().optional().default(''),
   linkedin: z.string().optional().default(''),
   experience: z.string().optional().default(''),
+  resumeBase64: z.string().optional(),
+  resumeFileName: z.string().optional(),
+  scheduledAt: z.string().optional().nullable(),
 }).passthrough();

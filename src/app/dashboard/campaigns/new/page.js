@@ -34,11 +34,11 @@ export default function NewCampaignPage() {
   const [resumeBase64, setResumeBase64] = useState('');
   const [resumeFileName, setResumeFileName] = useState('');
   const [profileLoaded, setProfileLoaded] = useState(false);
-
-  useEffect(() => {
-    fetchTemplates();
-    fetchProfile();
-  }, []);
+  
+  // Scheduling
+  const [isScheduled, setIsScheduled] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [userPlan, setUserPlan] = useState('free');
 
   const fetchProfile = async () => {
     try {
@@ -58,6 +58,7 @@ export default function NewCampaignPage() {
         });
         // Auto-fill Gmail from user email
         if (data.email) setCredentials(prev => ({ ...prev, email: data.email }));
+        setUserPlan(data.plan || 'free');
         setProfileLoaded(true);
       }
     } catch (err) {
@@ -73,6 +74,11 @@ export default function NewCampaignPage() {
     } catch (err) { showToast('Failed to load templates', 'error'); }
     finally { setTemplatesLoading(false); }
   };
+
+  useEffect(() => {
+    fetchTemplates();
+    fetchProfile();
+  }, []);
 
   const handleCsvUpload = async (e) => {
     const file = e.target.files[0];
@@ -106,6 +112,7 @@ export default function NewCampaignPage() {
 
   const handleLaunch = async () => {
     setLoading(true);
+
     try {
       const createRes = await fetch('/api/campaigns', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -113,7 +120,6 @@ export default function NewCampaignPage() {
           name: campaignName || `Campaign ${new Date().toLocaleDateString()}`, 
           templateId: selectedTemplate._id, 
           csvData,
-          resumeBase64,
           resumeFileName
         }),
       });
@@ -136,7 +142,15 @@ export default function NewCampaignPage() {
       
       const startRes = await fetch(`/api/campaigns/${campaignId}/start`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: gmailEmail, appPassword: credentials.appPassword, senderName: senderInfo.name, ...senderInfo }),
+        body: JSON.stringify({ 
+          email: gmailEmail, 
+          appPassword: credentials.appPassword, 
+          senderName: senderInfo.name, 
+          ...senderInfo,
+          scheduledAt: isScheduled && scheduledAt ? new Date(scheduledAt).toISOString() : null,
+          resumeBase64: !isScheduled ? resumeBase64 : undefined,
+          resumeFileName: !isScheduled ? resumeFileName : undefined
+        }),
       });
       
       let startData;
@@ -161,6 +175,7 @@ export default function NewCampaignPage() {
     if (step === 2) return csvData.length > 0;
     if (step === 3) return campaignName.trim().length > 0;
     if (step === 4) return credentials.email && credentials.appPassword && senderInfo.name;
+    if (step === 5 && isScheduled) return !!scheduledAt;
     return true;
   };
 
@@ -336,10 +351,41 @@ export default function NewCampaignPage() {
             {[{ l: 'Template', v: selectedTemplate?.name }, { l: 'Recipients', v: `${csvData.length} emails` }, { l: 'Campaign', v: campaignName }, { l: 'Sender', v: senderInfo.name }].map((i, k) => (
               <div key={k} className="p-3 rounded-lg bg-surface-800/50"><p className="text-xs text-surface-500">{i.l}</p><p className="text-sm font-medium text-surface-200">{i.v}</p></div>))}
           </div>
+          
+          <div className="max-w-md mx-auto mb-6 text-left p-4 rounded-xl border border-surface-700 bg-surface-800/30">
+            <h3 className="text-sm font-medium text-surface-200 mb-3">When should we send this?</h3>
+            <div className="flex items-center gap-4 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={!isScheduled} onChange={() => setIsScheduled(false)} className="text-primary-500 bg-surface-900 border-surface-700 focus:ring-primary-500" />
+                <span className="text-sm text-surface-300">Send Now</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" checked={isScheduled} onChange={() => setIsScheduled(true)} disabled={userPlan === 'free'} className="text-primary-500 bg-surface-900 border-surface-700 focus:ring-primary-500 disabled:opacity-50" />
+                <span className={`text-sm ${userPlan === 'free' ? 'text-surface-500' : 'text-surface-300'}`}>
+                  Schedule for Later {userPlan === 'free' && <span className="text-[10px] bg-primary-600/20 text-primary-400 px-1.5 py-0.5 rounded ml-1">Premium</span>}
+                </span>
+              </label>
+            </div>
+            
+            {isScheduled && (
+              <div className="animate-slide-up">
+                <label className="block text-xs font-medium text-surface-400 mb-1.5">Select Date & Time</label>
+                <input 
+                  type="datetime-local" 
+                  className="input text-sm" 
+                  value={scheduledAt} 
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                  min={new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)} // Min 5 mins from now
+                />
+                <p className="text-xs text-surface-500 mt-2">Maximum 7 days in advance. Requires active Premium plan.</p>
+              </div>
+            )}
+          </div>
+
           <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 max-w-md mx-auto mb-6">
             <p className="text-xs text-warning">⏱ Anti-spam delays will be applied. Campaign may take hours.</p></div>
-          <button onClick={handleLaunch} className="btn btn-primary btn-lg" disabled={loading}>
-            {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Launching...</> : <>Launch Campaign <Send className="w-4 h-4" /></>}
+          <button onClick={handleLaunch} className="btn btn-primary btn-lg" disabled={loading || (isScheduled && !scheduledAt)}>
+            {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {isScheduled ? 'Scheduling...' : 'Launching...'}</> : <>{isScheduled ? 'Schedule Campaign' : 'Launch Campaign'} <Send className="w-4 h-4" /></>}
           </button>
         </div>)}
       </div>

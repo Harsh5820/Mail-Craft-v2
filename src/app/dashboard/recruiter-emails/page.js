@@ -34,8 +34,8 @@ function EmailBatchCard({ batch }) {
   const copyTimerRef = useRef(null);
 
   const handleCopy = async () => {
-    // Build comma-separated string — directly compatible with campaign "Paste Emails" mode
-    const csvString = batch.emails.join(', ');
+    const realEmails = batch.emails.filter(e => e !== '__LOCKED__');
+    const csvString = realEmails.join(', ');
 
     try {
       if (!navigator.clipboard) {
@@ -45,7 +45,7 @@ function EmailBatchCard({ batch }) {
 
       // Success state
       setCopied(true);
-      showToast(`${batch.emails.length} email${batch.emails.length !== 1 ? 's' : ''} copied to clipboard`);
+      showToast(`${realEmails.length} email${realEmails.length !== 1 ? 's' : ''} copied to clipboard`);
 
       // Restore button after 2 seconds
       clearTimeout(copyTimerRef.current);
@@ -68,9 +68,14 @@ function EmailBatchCard({ batch }) {
   return (
     <div className="animate-fade-in">
       {/* Upload Date Header — above the card */}
-      <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-2">
-        Uploaded on {formatUploadDate(batch.uploadedAt)}
-      </p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+          Uploaded on {formatUploadDate(batch.uploadedAt)}
+        </p>
+        <span className="badge badge-neutral text-[10px] uppercase tracking-wide">
+          {batch.category || 'Other'}
+        </span>
+      </div>
 
       <div className="glass-card overflow-hidden">
         {/* Sticky subheader: email count + copy button */}
@@ -110,14 +115,27 @@ function EmailBatchCard({ batch }) {
           aria-label="Email address list"
         >
           <ul className="divide-y divide-surface-800/30">
-            {batch.emails.map((email) => (
-              <li
-                key={email}
-                className="py-2 text-sm text-surface-200 font-mono break-all leading-relaxed select-all"
-              >
-                {email}
-              </li>
-            ))}
+            {batch.emails.map((email, idx) => {
+              const isLocked = email === '__LOCKED__';
+              return (
+                <li
+                  key={idx}
+                  className={`py-2 text-sm font-mono break-all leading-relaxed flex items-center gap-2 ${
+                    isLocked ? 'text-surface-500 select-none' : 'text-surface-200 select-all'
+                  }`}
+                >
+                  {isLocked ? (
+                    <div className="flex items-center gap-2 w-full">
+                      <Lock className="w-3.5 h-3.5 text-warning/70 shrink-0" />
+                      <span className="blur-sm opacity-50 select-none flex-1 overflow-hidden">hidden.email@example.com</span>
+                      <span className="text-[10px] text-warning/80 font-sans uppercase tracking-wider ml-auto bg-warning/10 px-2 py-0.5 rounded-full shrink-0">Premium</span>
+                    </div>
+                  ) : (
+                    email
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>
@@ -160,7 +178,7 @@ export default function RecruiterEmailsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [accessDenied, setAccessDenied] = useState(false);
+  const [isPremium, setIsPremium] = useState(true);
 
   // Redirect unauthenticated users
   useEffect(() => {
@@ -170,18 +188,16 @@ export default function RecruiterEmailsPage() {
   }, [status, router]);
 
   const fetchBatches = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setTimeout(() => {
+      setLoading(true);
+      setError(null);
+    }, 0);
     try {
       const params = new URLSearchParams({ page: String(page), limit: '10' });
       const res = await fetch(`/api/recruiter-emails?${params}`);
 
       if (res.status === 401) {
         router.push('/login');
-        return;
-      }
-      if (res.status === 403) {
-        setAccessDenied(true);
         return;
       }
 
@@ -194,7 +210,7 @@ export default function RecruiterEmailsPage() {
       setBatches(data.batches || []);
       setTotal(data.total || 0);
       setTotalPages(data.totalPages || 1);
-      setAccessDenied(false);
+      setIsPremium(data.isPremium);
     } catch (err) {
       setError(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
@@ -217,26 +233,7 @@ export default function RecruiterEmailsPage() {
     );
   }
 
-  // ── Access denied — premium required ──
-  if (accessDenied) {
-    return (
-      <div className="animate-fade-in max-w-lg mx-auto text-center py-20">
-        <div className="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center mx-auto mb-6">
-          <Lock className="w-8 h-8 text-warning" />
-        </div>
-        <h1 className="text-2xl font-bold text-surface-100 mb-3">Premium Feature</h1>
-        <p className="text-surface-400 mb-2 text-sm">
-          Recruiter email contacts are only available to users with an active premium plan.
-        </p>
-        <p className="text-surface-500 text-xs mb-8">
-          Upgrade to the Daily or Monthly plan to access recruiter contacts.
-        </p>
-        <Link href="/dashboard/settings" className="btn btn-primary">
-          Upgrade Plan
-        </Link>
-      </div>
-    );
-  }
+  // ── Access denied — premium required (removed, replaced by limited view) ──
 
   return (
     <div className="animate-fade-in max-w-2xl">
@@ -254,6 +251,22 @@ export default function RecruiterEmailsPage() {
             : `${total} upload batch${total !== 1 ? 'es' : ''} available`}
         </p>
       </div>
+
+      {/* Upgrade Banner for Free Users */}
+      {!loading && !isPremium && (
+        <div className="flex items-center justify-between p-4 rounded-xl border border-warning/20 bg-gradient-to-r from-warning/10 to-transparent mb-6">
+          <div className="flex items-center gap-3">
+            <Lock className="w-5 h-5 text-warning" />
+            <div>
+              <p className="text-sm font-semibold text-warning">Limited View (Free Plan)</p>
+              <p className="text-xs text-surface-400">Upgrade to Premium to unlock all recruiter emails.</p>
+            </div>
+          </div>
+          <Link href="/dashboard/settings" className="btn btn-sm bg-warning/20 text-warning hover:bg-warning/30 border-0">
+            Upgrade
+          </Link>
+        </div>
+      )}
 
       {/* Loading batches */}
       {loading ? (

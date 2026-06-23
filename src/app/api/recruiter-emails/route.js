@@ -22,15 +22,18 @@ export async function GET(req) {
     }
 
     const isAdmin = session.user.role === 'admin';
+    let isPremium = false;
+    let interests = [];
 
-    // Non-admin users must have an active premium plan
+    // Non-admin users fetch premium status and interests
     if (!isAdmin) {
-      const hasPremium = await isActivePremiumUser(session.user.id);
-      if (!hasPremium) {
-        return NextResponse.json(
-          { error: 'Access denied. An active premium plan is required to view recruiter emails.' },
-          { status: 403 }
-        );
+      isPremium = await isActivePremiumUser(session.user.id);
+      // Fetch user interests
+      const mongoose = await import('mongoose');
+      const User = mongoose.models.User || mongoose.model('User');
+      const user = await User.findById(session.user.id).select('profile.interests').lean();
+      if (user?.profile?.interests) {
+        interests = user.profile.interests;
       }
     }
 
@@ -38,10 +41,14 @@ export async function GET(req) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
 
-    // Admin gets full batch data (for management UI); premium gets safe public shape
+    // Admin gets full batch data (for management UI); premium/free gets filtered public shape
     const result = isAdmin
       ? await recruiterService.getBatchesForAdmin(page, limit)
-      : await recruiterService.getBatchesForPremium(page, limit);
+      : await recruiterService.getBatchesForPremium(page, limit, isPremium, interests);
+
+    if (isAdmin) {
+      result.isPremium = true;
+    }
 
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
@@ -69,13 +76,13 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const { emailText } = body;
+    const { emailText, category } = body;
 
     if (!emailText || typeof emailText !== 'string') {
       return NextResponse.json({ error: 'emailText field is required.' }, { status: 400 });
     }
 
-    const result = await recruiterService.uploadBatch(emailText, session.user.id);
+    const result = await recruiterService.uploadBatch(emailText, session.user.id, category || 'Other');
 
     if (!result.success) {
       return NextResponse.json(

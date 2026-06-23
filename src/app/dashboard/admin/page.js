@@ -186,6 +186,7 @@ function PlanRequestsSection() {
 function RecruiterEmailsSection() {
   // Upload state
   const [emailText, setEmailText] = useState('');
+  const [category, setCategory] = useState('Other');
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null); // { stats, invalidEmails }
   const [uploadError, setUploadError] = useState(null);
@@ -239,7 +240,7 @@ function RecruiterEmailsSection() {
       const res = await fetch('/api/recruiter-emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailText }),
+        body: JSON.stringify({ emailText, category }),
       });
       const data = await res.json();
 
@@ -332,24 +333,43 @@ function RecruiterEmailsSection() {
         </div>
 
         <form onSubmit={handleUpload} className="space-y-4">
-          <div>
-            <label htmlFor="recruiter-email-textarea" className="block text-sm font-medium text-surface-300 mb-2">
-              Recruiter Emails
-            </label>
-            <textarea
-              id="recruiter-email-textarea"
-              className="input font-mono text-sm leading-relaxed"
-              style={{ minHeight: '140px', resize: 'vertical' }}
-              placeholder={
-                'recruiter1@company.com, recruiter2@company.com, recruiter3@company.com\n\nPaste email addresses separated by commas.\nSpaces, empty values, and duplicates are handled automatically.'
-              }
-              value={emailText}
-              onChange={(e) => {
-                setEmailText(e.target.value);
-                if (uploadError) setUploadError(null);
-              }}
-              disabled={uploading}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-3">
+              <label htmlFor="recruiter-email-textarea" className="block text-sm font-medium text-surface-300 mb-2">
+                Recruiter Emails
+              </label>
+              <textarea
+                id="recruiter-email-textarea"
+                className="input font-mono text-sm leading-relaxed"
+                style={{ minHeight: '140px', resize: 'vertical' }}
+                placeholder={
+                  'recruiter1@company.com, recruiter2@company.com, recruiter3@company.com\n\nPaste email addresses separated by commas.\nSpaces, empty values, and duplicates are handled automatically.'
+                }
+                value={emailText}
+                onChange={(e) => {
+                  setEmailText(e.target.value);
+                  if (uploadError) setUploadError(null);
+                }}
+                disabled={uploading}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-surface-300 mb-2">
+                Category
+              </label>
+              <select
+                className="input"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                disabled={uploading}
+              >
+                <option value="PM">Product Management (PM)</option>
+                <option value="AI">Artificial Intelligence (AI)</option>
+                <option value="Dev">Development (Dev)</option>
+                <option value="Data">Data Science (Data)</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
           </div>
 
           {/* Frontend validation message */}
@@ -442,6 +462,7 @@ function RecruiterEmailsSection() {
                       />
                     </th>
                     <th>Upload Date</th>
+                    <th>Category</th>
                     <th>Email Count</th>
                     <th>Preview</th>
                     <th>Actions</th>
@@ -465,6 +486,9 @@ function RecruiterEmailsSection() {
                           {batch.label === 'migrated_legacy' && (
                             <span className="ml-2 badge badge-neutral text-[10px]">legacy</span>
                           )}
+                        </td>
+                        <td>
+                          <span className="badge badge-neutral">{batch.category || 'Other'}</span>
                         </td>
                         <td>
                           <span className="badge badge-primary">

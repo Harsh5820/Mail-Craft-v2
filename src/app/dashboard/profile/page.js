@@ -28,13 +28,15 @@ export default function ProfilePage() {
     contact_number_2: '',
     location: '',
     headline: '',
+    interests: [],
   });
+  const [referralCode, setReferralCode] = useState('');
 
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
     if (!planExpiresAt || plan === 'free') {
-      setTimeLeft('');
+      setTimeout(() => setTimeLeft(''), 0);
       return;
     }
 
@@ -66,10 +68,6 @@ export default function ProfilePage() {
     return () => clearInterval(interval);
   }, [planExpiresAt, plan]);
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
   const fetchProfile = async () => {
     try {
       const res = await fetch('/api/profile');
@@ -80,7 +78,8 @@ export default function ProfilePage() {
         setPlanExpiresAt(data.planExpiresAt);
         setPlanInfo(data.planInfo);
         setDailyEmails(data.dailyEmails);
-        setProfile(prev => ({ ...prev, ...data.profile }));
+        setReferralCode(data.referralCode || '');
+        setProfile(prev => ({ ...prev, ...data.profile, interests: data.profile?.interests || [] }));
       }
     } catch (err) {
       showToast('Failed to load profile', 'error');
@@ -88,6 +87,10 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   const updateField = (key, value) => {
     setProfile(prev => ({ ...prev, [key]: value }));
@@ -189,7 +192,7 @@ export default function ProfilePage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Clock className="w-4 h-4 text-info" />
-                <p className="text-xs font-medium text-surface-400">Today's Usage</p>
+                <p className="text-xs font-medium text-surface-400">Today&apos;s Usage</p>
               </div>
               <p className="text-2xl font-bold text-surface-100">
                 {dailyEmails.used}/{dailyEmails.allowed}
@@ -275,6 +278,86 @@ export default function ProfilePage() {
             ? '🎉 All set! Your profile will auto-fill in every campaign.'
             : `Fill ${completionFields.length - filledCount} more field${completionFields.length - filledCount > 1 ? 's' : ''} so campaigns launch faster.`}
         </p>
+      </div>
+
+      {/* Referral Program */}
+      <div className="card mb-6 border border-primary-500/20 bg-gradient-to-br from-primary-600/5 to-transparent">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-primary-600/15 flex items-center justify-center">
+            <Award className="w-4 h-4 text-primary-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-surface-100">Refer & Earn Premium</h2>
+            <p className="text-xs text-surface-400">Get free premium days for inviting friends.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-3 text-sm text-surface-300">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-success mt-0.5 shrink-0" />
+              <p>They register: <strong className="text-surface-100">You get 1 Day Free</strong></p>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-success mt-0.5 shrink-0" />
+              <p>They subscribe: <strong className="text-surface-100">You get 10 Days Free</strong></p>
+            </div>
+          </div>
+          <div className="bg-surface-900/50 p-4 rounded-xl border border-surface-800">
+            <label className="block text-xs font-medium text-surface-400 mb-1.5">Your Referral Link</label>
+            <div className="flex items-center gap-2">
+              <input 
+                className="input text-xs font-mono" 
+                value={referralCode ? `${window.location.origin}/register?ref=${referralCode}` : 'Loading...'} 
+                readOnly 
+              />
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/register?ref=${referralCode}`);
+                  showToast('Referral link copied!');
+                }}
+                className="btn btn-secondary btn-sm shrink-0"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Interests Selection */}
+      <div className="card mb-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-8 h-8 rounded-lg bg-info/15 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-info" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-surface-100">Your Interests</h2>
+            <p className="text-xs text-surface-400">Select domains to see personalized recruiter emails.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['PM', 'AI', 'Dev', 'Data', 'Other'].map(category => {
+            const isSelected = profile.interests?.includes(category);
+            return (
+              <button
+                key={category}
+                onClick={() => {
+                  const newInterests = isSelected
+                    ? profile.interests.filter(i => i !== category)
+                    : [...(profile.interests || []), category];
+                  updateField('interests', newInterests);
+                }}
+                className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                  isSelected
+                    ? 'bg-primary-600/20 border-primary-500/50 text-primary-300'
+                    : 'bg-surface-800/50 border-surface-700 text-surface-400 hover:text-surface-200 hover:border-surface-600'
+                }`}
+              >
+                {category}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Basic Info */}

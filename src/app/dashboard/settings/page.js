@@ -188,7 +188,7 @@ export default function SettingsPage() {
               <ol className="text-xs text-info/80 list-decimal pl-4 space-y-1">
                 <li><strong>Daily Plan (₹10):</strong> 24 hours access, 100 emails/day</li>
                 <li><strong>Monthly Plan (₹1,000):</strong> 30 days access, 300 emails/day</li>
-                <li>Send payment via UPI to your organization's UPI ID</li>
+                <li>Send payment via UPI to your organization&apos;s UPI ID</li>
                 <li>Copy the UPI Transaction ID and submit below</li>
                 <li>Admin approval usually within 24 hours</li>
               </ol>

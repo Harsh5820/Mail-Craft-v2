@@ -25,7 +25,7 @@ function ResetPasswordForm() {
 
   useEffect(() => {
     if (!token) {
-      setError('Invalid reset link. No security token found.');
+      setTimeout(() => setError('Invalid reset link. No security token found.'), 0);
     }
   }, [token]);
 

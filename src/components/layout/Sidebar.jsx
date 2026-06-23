@@ -18,6 +18,7 @@ import {
   Moon,
   X,
   Briefcase,
+  Award,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/dashboard/profile', label: 'Profile', icon: UserCircle },
   { href: '/dashboard/templates', label: 'Templates', icon: FileText },
   { href: '/dashboard/campaigns', label: 'Campaigns', icon: Send },
+  { href: '/dashboard/ats-checker', label: 'ATS Checker', icon: Award },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
@@ -39,7 +41,7 @@ export default function Sidebar() {
   useEffect(() => {
     // Load theme from localStorage
     const savedTheme = localStorage.getItem('theme') || 'dark';
-    setTheme(savedTheme);
+    setTimeout(() => setTheme(savedTheme), 0);
     if (savedTheme === 'light') {
       document.documentElement.classList.add('light');
     }
@@ -58,7 +60,7 @@ export default function Sidebar() {
 
   // Close mobile drawer on route transition
   useEffect(() => {
-    setMobileMenuOpen(false);
+    setTimeout(() => setMobileMenuOpen(false), 0);
   }, [pathname]);
 
   const initials = session?.user?.name?.[0]?.toUpperCase() || '?';
@@ -272,6 +274,17 @@ export default function Sidebar() {
               >
                 <UserCircle className="w-[18px] h-[18px]" />
                 Profile
+              </Link>
+              <Link
+                href="/dashboard/ats-checker"
+                className={`flex items-center gap-3 p-3 rounded-xl border text-sm font-medium text-surface-200 transition-all ${
+                  pathname.startsWith('/dashboard/ats-checker')
+                    ? 'border-primary-500 bg-primary-600/10 text-primary-400'
+                    : 'border-surface-800 bg-surface-800/40 hover:border-surface-700'
+                }`}
+              >
+                <Award className="w-[18px] h-[18px]" />
+                ATS Checker
               </Link>
               <Link
                 href="/dashboard/analytics"

@@ -37,6 +37,12 @@ const RecruiterBatchSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    category: {
+      type: String,
+      enum: ['PM', 'AI', 'Dev', 'Data', 'Other'],
+      default: 'Other',
+      index: true,
+    },
   },
   {
     timestamps: true,

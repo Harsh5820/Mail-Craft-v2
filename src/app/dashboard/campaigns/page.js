@@ -18,10 +18,6 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchCampaigns();
-  }, []);
-
   const fetchCampaigns = async () => {
     try {
       const res = await fetch('/api/campaigns');
@@ -33,6 +29,10 @@ export default function CampaignsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchCampaigns();
+  }, []);
 
   const handleAction = async (id, action) => {
     try {

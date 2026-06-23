@@ -93,7 +93,7 @@ export function parseEmailText(rawText) {
  *   error?: string
  * }}
  */
-export async function uploadBatch(emailText, adminUserId) {
+export async function uploadBatch(emailText, adminUserId, category = 'Other') {
   await dbConnect();
 
   // Empty / whitespace-only check
@@ -166,6 +166,7 @@ export async function uploadBatch(emailText, adminUserId) {
     emailCount: newEmails.length,
     uploadedBy: adminUserId,
     uploadedAt: new Date(),
+    category,
   });
 
   return {
@@ -200,7 +201,7 @@ export async function getBatchesForAdmin(page = 1, limit = 20) {
 
   const [batches, total] = await Promise.all([
     RecruiterBatch.find()
-      .select('emails emailCount uploadedAt label createdAt')
+      .select('emails emailCount uploadedAt label createdAt category')
       .sort({ uploadedAt: -1 })
       .skip(skip)
       .limit(safeLimit)
@@ -225,7 +226,7 @@ export async function getBatchesForAdmin(page = 1, limit = 20) {
  * @param {number} limit - batches per page
  * @returns {{ batches: Array, total: number, page: number, totalPages: number }}
  */
-export async function getBatchesForPremium(page = 1, limit = 20) {
+export async function getBatchesForPremium(page = 1, limit = 20, isPremium = false, interests = []) {
   await dbConnect();
 
   const safeLimit = Math.min(Math.max(1, limit), 50);
@@ -235,9 +236,15 @@ export async function getBatchesForPremium(page = 1, limit = 20) {
   // Only batches with at least 1 email
   const query = { emailCount: { $gt: 0 } };
 
+  // Filter by interests if provided
+  if (interests && interests.length > 0) {
+    // If interests provided, allow those categories, plus 'Other' to be safe
+    query.category = { $in: [...interests, 'Other'] };
+  }
+
   const [batches, total] = await Promise.all([
     RecruiterBatch.find(query)
-      .select('emails emailCount uploadedAt') // explicitly exclude uploadedBy
+      .select('emails emailCount uploadedAt category') // explicitly exclude uploadedBy
       .sort({ uploadedAt: -1 })
       .skip(skip)
       .limit(safeLimit)
@@ -245,19 +252,33 @@ export async function getBatchesForPremium(page = 1, limit = 20) {
     RecruiterBatch.countDocuments(query),
   ]);
 
-  // Return safe public shape — no uploadedBy, no internal _id exposure
-  const safeBatches = batches.map((b) => ({
-    id: b._id.toString(),
-    uploadedAt: b.uploadedAt,
-    emailCount: b.emailCount,
-    emails: b.emails,
-  }));
+  // Return safe public shape
+  const safeBatches = batches.map((b) => {
+    let emailsToReturn = b.emails;
+    if (!isPremium) {
+      // Free users only see max 2 emails per batch
+      emailsToReturn = b.emails.slice(0, 2);
+      if (b.emails.length > 2) {
+        // Mask the rest
+        emailsToReturn.push(...Array(b.emails.length - 2).fill('__LOCKED__'));
+      }
+    }
+
+    return {
+      id: b._id.toString(),
+      uploadedAt: b.uploadedAt,
+      emailCount: b.emailCount,
+      category: b.category || 'Other',
+      emails: emailsToReturn,
+    };
+  });
 
   return {
     batches: safeBatches,
     total,
     page: safePage,
     totalPages: Math.ceil(total / safeLimit),
+    isPremium,
   };
 }
 

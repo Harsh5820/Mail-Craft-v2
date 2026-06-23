@@ -68,6 +68,34 @@ const UserSchema = new mongoose.Schema(
       contact_number_2: { type: String, default: '' },
       location: { type: String, default: '' },
       headline: { type: String, default: '' },
+      interests: { type: [String], default: [] },
+    },
+    // Monetization & Premium Limits
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    aiGenerationsToday: {
+      type: Number,
+      default: 0,
+    },
+    lastAIGenerationDate: {
+      type: Date,
+      default: null,
+    },
+    atsChecksThisMonth: {
+      type: Number,
+      default: 0,
+    },
+    lastAtsCheckDate: {
+      type: Date,
+      default: null,
     },
   },
   {

@@ -20,7 +20,7 @@ const CampaignSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['draft', 'running', 'paused', 'completed', 'failed', 'cancelled'],
+      enum: ['draft', 'scheduled', 'running', 'paused', 'completed', 'failed', 'cancelled'],
       default: 'draft',
       index: true,
     },
@@ -60,6 +60,15 @@ const CampaignSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    scheduledAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    scheduledCredentials: {
+      type: String, // Encrypted credentials
+      default: '',
+    },
     completedAt: {
       type: Date,
       default: null,
@@ -73,5 +82,7 @@ const CampaignSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+CampaignSchema.index({ status: 1, scheduledAt: 1 });
 
 export default mongoose.models.Campaign || mongoose.model('Campaign', CampaignSchema);

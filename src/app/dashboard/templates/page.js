@@ -12,10 +12,8 @@ export default function TemplatesPage() {
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [form, setForm] = useState({ name: '', subject: '', html: '' });
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetchTemplates();
-  }, []);
+  const [aiObjective, setAiObjective] = useState('');
+  const [generatingAI, setGeneratingAI] = useState(false);
 
   const fetchTemplates = async () => {
     try {
@@ -28,6 +26,10 @@ export default function TemplatesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -101,7 +103,38 @@ export default function TemplatesPage() {
 <p>Best regards,<br/>{{user_name}}</p>
 <p><a href="{{linkedin}}">LinkedIn</a> | <a href="{{github}}">GitHub</a> | <a href="{{portfolio}}">Portfolio</a></p>`,
     });
+    setAiObjective('');
     setShowModal(true);
+  };
+
+  const handleAIGenerate = async () => {
+    if (!aiObjective.trim() || aiObjective.trim().length < 10) {
+      showToast('Please provide a descriptive objective (min 10 characters)', 'error');
+      return;
+    }
+    
+    setGeneratingAI(true);
+    try {
+      const res = await fetch('/api/ai/generate-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ objective: aiObjective }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error);
+      
+      setForm(prev => ({
+        ...prev,
+        subject: data.subject,
+        html: data.html,
+      }));
+      showToast(`Template generated! (${data.remainingGenerations} generations left today)`);
+    } catch (err) {
+      showToast(err.message || 'Failed to generate template', 'error');
+    } finally {
+      setGeneratingAI(false);
+    }
   };
 
   return (
@@ -207,6 +240,30 @@ export default function TemplatesPage() {
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   required
                 />
+              </div>
+
+              {/* AI Generator Section */}
+              <div className="p-4 rounded-xl border border-primary-500/20 bg-gradient-to-br from-primary-600/10 to-transparent">
+                <label className="block text-sm font-medium text-primary-300 mb-1.5 flex items-center gap-2">
+                  ✨ Write with Gemini (Premium)
+                </label>
+                <p className="text-xs text-surface-400 mb-3">Describe the role, company, or tone you want, and AI will write the template using your profile.</p>
+                <div className="flex gap-2">
+                  <input
+                    className="input text-sm flex-1"
+                    placeholder="e.g., A casual outreach for a Senior React dev role at an AI startup..."
+                    value={aiObjective}
+                    onChange={(e) => setAiObjective(e.target.value)}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleAIGenerate} 
+                    disabled={generatingAI || !aiObjective.trim()} 
+                    className="btn btn-primary whitespace-nowrap"
+                  >
+                    {generatingAI ? 'Generating...' : 'Generate (Limit: 2/day)'}
+                  </button>
+                </div>
               </div>
 
               <div>

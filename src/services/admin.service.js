@@ -56,6 +56,23 @@ export async function updateRequestStatus(requestId, status) {
       }
     }, { new: true });
 
+    // Handle Subscription Referral Bonus (+10 days to referrer)
+    if (updatedUser.referredBy) {
+      const referrer = await User.findById(updatedUser.referredBy);
+      if (referrer) {
+        const now = new Date();
+        if (referrer.plan === 'free' || !referrer.planExpiresAt || referrer.planExpiresAt < now) {
+          referrer.plan = 'daily'; // Temporary premium
+          referrer.planExpiresAt = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
+          referrer.dailySendCount = 0;
+        } else {
+          // Extend existing plan
+          referrer.planExpiresAt = new Date(referrer.planExpiresAt.getTime() + 10 * 24 * 60 * 60 * 1000);
+        }
+        await referrer.save();
+      }
+    }
+
     // Log the upgrade in audit log
     try {
       await AuditLog.create({

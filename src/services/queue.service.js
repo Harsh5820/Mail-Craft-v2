@@ -31,12 +31,12 @@ const ANTI_SPAM = {
  * Start processing a campaign
  * This runs asynchronously — call and forget
  */
-export async function startCampaignQueue(campaignId, credentials, senderInfo) {
+export async function startCampaignQueue(campaignId, credentials, senderInfo, attachment = null) {
   // Mark campaign as active
   activeCampaigns.set(campaignId, { paused: false, cancelled: false });
 
   // Run in background — don't await
-  processCampaign(campaignId, credentials, senderInfo).catch(async (error) => {
+  processCampaign(campaignId, credentials, senderInfo, attachment).catch(async (error) => {
     console.error(`Campaign ${campaignId} fatal error:`, error.message);
     await Campaign.findByIdAndUpdate(campaignId, {
       status: 'failed',
@@ -51,7 +51,7 @@ export async function startCampaignQueue(campaignId, credentials, senderInfo) {
 /**
  * Core campaign processing loop
  */
-async function processCampaign(campaignId, credentials, senderInfo) {
+async function processCampaign(campaignId, credentials, senderInfo, attachment = null) {
   let transporter = null;
 
   try {
@@ -177,11 +177,17 @@ async function processCampaign(campaignId, credentials, senderInfo) {
 
         // Build attachments
         const attachments = [];
-        if (campaign.resumeBase64 && campaign.resumeFileName) {
-          // Extract just the base64 content (strip the data:application/pdf;base64, prefix if it exists)
-          const base64Data = campaign.resumeBase64.replace(/^data:.*?;base64,/, '');
+        
+        // Use inline attachment (immediate send) or DB attachment (scheduled send)
+        const finalAttachment = attachment || (campaign.resumeBase64 && campaign.resumeFileName ? {
+          resumeBase64: campaign.resumeBase64,
+          resumeFileName: campaign.resumeFileName
+        } : null);
+
+        if (finalAttachment && finalAttachment.resumeBase64 && finalAttachment.resumeFileName) {
+          const base64Data = finalAttachment.resumeBase64.replace(/^data:.*?;base64,/, '');
           attachments.push({
-            filename: campaign.resumeFileName,
+            filename: finalAttachment.resumeFileName,
             content: Buffer.from(base64Data, 'base64'),
           });
         }
@@ -252,10 +258,10 @@ async function processCampaign(campaignId, credentials, senderInfo) {
     destroyTransporter(transporter);
     activeCampaigns.delete(campaignId);
 
-    // Clean up resume from DB to free up space (since it's base64, it's large)
+    // Clean up temporary resume from DB to free up space (scheduled runs)
     try {
       await Campaign.findByIdAndUpdate(campaignId, { 
-        $unset: { resumeBase64: 1 } 
+        $unset: { resumeBase64: 1, resumeFileName: 1 } 
       });
     } catch (e) {
       // Silent cleanup

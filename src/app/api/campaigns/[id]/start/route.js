@@ -61,7 +61,7 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Campaign is already completed' }, { status: 400 });
     }
 
-    // Verify SMTP credentials before starting
+    // Verify SMTP credentials before starting/scheduling
     const verification = await verifyCredentials(validated.email, validated.appPassword);
     if (!verification.valid) {
       return NextResponse.json(
@@ -70,7 +70,68 @@ export async function POST(req, { params }) {
       );
     }
 
-    // Start the campaign queue (fire and forget)
+    // Handle Scheduling
+    if (validated.scheduledAt) {
+      if (user.plan === 'free') {
+        return NextResponse.json({ error: 'Scheduling is a Premium feature.' }, { status: 403 });
+      }
+
+      const scheduledDate = new Date(validated.scheduledAt);
+      const now = new Date();
+      
+      if (scheduledDate <= now) {
+        return NextResponse.json({ error: 'Scheduled time must be in the future.' }, { status: 400 });
+      }
+
+      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      if (scheduledDate > sevenDaysFromNow) {
+        return NextResponse.json({ error: 'Cannot schedule more than 7 days in advance.' }, { status: 400 });
+      }
+
+      if (user.planExpiresAt && scheduledDate > new Date(user.planExpiresAt)) {
+        return NextResponse.json({ error: 'Scheduled time must be before your Premium plan expires.' }, { status: 400 });
+      }
+
+      const mongoose = await import('mongoose');
+      const Campaign = mongoose.models.Campaign || mongoose.model('Campaign');
+      
+      const activeScheduledCount = await Campaign.countDocuments({
+        userId: session.user.id,
+        status: 'scheduled',
+      });
+
+      if (activeScheduledCount >= 4) {
+        return NextResponse.json({ error: 'Maximum of 4 active scheduled campaigns allowed.' }, { status: 400 });
+      }
+
+      const { encryptCredentials } = await import('@/services/security.service');
+      const encryptedCreds = encryptCredentials({
+        email: validated.email,
+        appPassword: validated.appPassword,
+        senderInfo: {
+          name: senderName,
+          skills: validated.skills || '',
+          portfolio: validated.portfolio || '',
+          linkedin: validated.linkedin || '',
+          experience: validated.experience || '',
+        }
+      });
+
+      campaign.status = 'scheduled';
+      campaign.scheduledAt = scheduledDate;
+      campaign.scheduledCredentials = encryptedCreds;
+
+      if (validated.resumeBase64 && validated.resumeFileName) {
+        campaign.resumeBase64 = validated.resumeBase64;
+        campaign.resumeFileName = validated.resumeFileName;
+      }
+
+      await campaign.save();
+
+      return NextResponse.json({ message: 'Campaign scheduled', campaignId: id });
+    }
+
+    // Start the campaign queue immediately (fire and forget)
     await startCampaignQueue(
       id,
       { email: validated.email, appPassword: validated.appPassword },
@@ -80,6 +141,10 @@ export async function POST(req, { params }) {
         portfolio: validated.portfolio || '',
         linkedin: validated.linkedin || '',
         experience: validated.experience || '',
+      },
+      {
+        resumeBase64: validated.resumeBase64,
+        resumeFileName: validated.resumeFileName,
       }
     );
 
