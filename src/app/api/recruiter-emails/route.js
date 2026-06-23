@@ -7,7 +7,12 @@ import * as recruiterService from '@/services/recruiter.service';
 /**
  * GET /api/recruiter-emails
  * Access: Active premium users + admins
- * Query params: company_name, recruiter_name, recruiter_email, job_role, page, limit
+ * Query params: page, limit
+ *
+ * Returns batches grouped by upload, newest first.
+ * Premium users receive: { id, uploadedAt, emailCount, emails[] }
+ * Admin users receive additional batch metadata.
+ * uploadedBy is NEVER returned to any caller.
  */
 export async function GET(req) {
   try {
@@ -30,17 +35,15 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filters = {
-      company_name: searchParams.get('company_name') || '',
-      recruiter_name: searchParams.get('recruiter_name') || '',
-      recruiter_email: searchParams.get('recruiter_email') || '',
-      job_role: searchParams.get('job_role') || '',
-    };
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
 
-    const result = await recruiterService.getRecruiterEmails(filters, page, limit);
-    return NextResponse.json(result);
+    // Admin gets full batch data (for management UI); premium gets safe public shape
+    const result = isAdmin
+      ? await recruiterService.getBatchesForAdmin(page, limit)
+      : await recruiterService.getBatchesForPremium(page, limit);
+
+    return NextResponse.json({ success: true, ...result });
   } catch (error) {
     console.error('Recruiter emails GET error:', error.message);
     return NextResponse.json({ error: 'Failed to fetch recruiter emails' }, { status: 500 });
@@ -50,7 +53,10 @@ export async function GET(req) {
 /**
  * POST /api/recruiter-emails
  * Access: Admin only
- * Body: { company_name, recruiter_name, recruiter_email, job_role }
+ * Body: { emailText: string }  — comma-separated email addresses
+ *
+ * Parses, validates, deduplicates, and stores as a single batch.
+ * Returns upload stats.
  */
 export async function POST(req) {
   try {
@@ -63,16 +69,32 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const result = await recruiterService.addRecruiterEmail(body, session.user.id);
+    const { emailText } = body;
 
-    if (!result.success) {
-      const status = result.isDuplicate ? 409 : 400;
-      return NextResponse.json({ error: result.error }, { status });
+    if (!emailText || typeof emailText !== 'string') {
+      return NextResponse.json({ error: 'emailText field is required.' }, { status: 400 });
     }
 
-    return NextResponse.json({ message: 'Recruiter email added successfully', record: result.record }, { status: 201 });
+    const result = await recruiterService.uploadBatch(emailText, session.user.id);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error, stats: result.stats, invalidEmails: result.invalidEmails },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        message: `${result.stats.uploaded} recruiter email${result.stats.uploaded !== 1 ? 's' : ''} uploaded successfully.`,
+        stats: result.stats,
+        invalidEmails: result.invalidEmails,
+        batchId: result.batchId,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Recruiter email POST error:', error.message);
-    return NextResponse.json({ error: 'Failed to add recruiter email' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to upload recruiter emails' }, { status: 500 });
   }
 }

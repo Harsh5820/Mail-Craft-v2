@@ -5,6 +5,8 @@ import * as recruiterService from '@/services/recruiter.service';
 /**
  * DELETE /api/recruiter-emails/[id]
  * Access: Admin only
+ * Deletes an entire upload batch by its ID.
+ * All emails in that batch are removed.
  */
 export async function DELETE(req, { params }) {
   try {
@@ -17,15 +19,15 @@ export async function DELETE(req, { params }) {
     }
 
     const { id } = await params;
-    const deleted = await recruiterService.deleteRecruiterEmail(id);
+    const deleted = await recruiterService.deleteBatch(id);
 
     if (!deleted) {
-      return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ message: 'Recruiter email deleted successfully' });
+    return NextResponse.json({ message: 'Batch deleted successfully' });
   } catch (error) {
-    console.error('Recruiter email DELETE error:', error.message);
-    return NextResponse.json({ error: 'Failed to delete recruiter email' }, { status: 500 });
+    console.error('Recruiter batch DELETE error:', error.message);
+    return NextResponse.json({ error: 'Failed to delete batch' }, { status: 500 });
   }
 }

@@ -1,51 +1,215 @@
+/**
+ * recruiter.service.js
+ *
+ * Handles all recruiter email batch operations:
+ * - Admin uploads (textarea → batch)
+ * - Premium/admin reads (batches, newest-first)
+ * - Admin delete (single batch, bulk batch)
+ * - One-time migration from legacy RecruiterEmail flat records
+ */
+
 import dbConnect from '@/lib/db';
-import RecruiterEmail from '@/lib/models/RecruiterEmail';
+import RecruiterBatch from '@/lib/models/RecruiterBatch';
 import mongoose from 'mongoose';
 
-const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
+// RFC-5322 simplified but practical email regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Get paginated recruiter emails with optional search filters.
- * Available to admins and active premium users (access check done in API route).
- *
- * @param {object} filters - { company_name, recruiter_name, recruiter_email, job_role }
- * @param {number} page - 1-based page number
- * @param {number} limit - records per page (max 100)
- * @returns {{ records: Array, total: number, page: number, totalPages: number }}
+ * Validate a single email address string.
+ * @param {string} email
+ * @returns {boolean}
  */
-export async function getRecruiterEmails(filters = {}, page = 1, limit = 20) {
+function isValidEmail(email) {
+  return typeof email === 'string' && EMAIL_REGEX.test(email);
+}
+
+/**
+ * Parse and validate a comma-separated email input string.
+ * Returns categorized results — does not touch the database.
+ *
+ * Processing steps (all done server-side):
+ * 1. Split on commas
+ * 2. Trim whitespace from every token
+ * 3. Convert to lowercase
+ * 4. Remove empty strings from consecutive/trailing commas
+ * 5. Validate each email
+ * 6. Deduplicate within the submission (keep first occurrence)
+ *
+ * @param {string} rawText - Raw comma-separated email string from admin textarea
+ * @returns {{ validEmails: string[], invalidEmails: string[], inSubmissionDuplicates: string[] }}
+ */
+export function parseEmailText(rawText) {
+  if (!rawText || typeof rawText !== 'string') {
+    return { validEmails: [], invalidEmails: [], inSubmissionDuplicates: [] };
+  }
+
+  const tokens = rawText
+    .split(',')
+    .map((t) => t.trim().toLowerCase())
+    .filter((t) => t.length > 0);
+
+  const seen = new Set();
+  const validEmails = [];
+  const invalidEmails = [];
+  const inSubmissionDuplicates = [];
+
+  for (const token of tokens) {
+    if (!isValidEmail(token)) {
+      invalidEmails.push(token);
+      continue;
+    }
+    if (seen.has(token)) {
+      inSubmissionDuplicates.push(token);
+      continue;
+    }
+    seen.add(token);
+    validEmails.push(token);
+  }
+
+  return { validEmails, invalidEmails, inSubmissionDuplicates };
+}
+
+/**
+ * Upload a batch of recruiter emails from admin textarea input.
+ * Creates one RecruiterBatch document for this submission.
+ *
+ * Returns detailed stats so the admin can see exactly what happened.
+ *
+ * @param {string} emailText - Raw comma-separated emails from admin textarea
+ * @param {string} adminUserId - MongoDB ObjectId string of the uploading admin
+ * @returns {{
+ *   success: boolean,
+ *   stats: {
+ *     total: number,        // total tokens after split/trim (non-empty)
+ *     valid: number,        // passed format validation and not a duplicate-in-submission
+ *     invalid: number,      // failed email format validation
+ *     inSubmissionDuplicates: number, // duplicate within this paste (only first kept)
+ *     dbDuplicates: number, // already exist in the database
+ *     uploaded: number,     // actually stored in new batch
+ *   },
+ *   invalidEmails: string[],
+ *   batchId?: string,
+ *   error?: string
+ * }}
+ */
+export async function uploadBatch(emailText, adminUserId) {
+  await dbConnect();
+
+  // Empty / whitespace-only check
+  if (!emailText || !emailText.trim() || emailText.replace(/[,\s]/g, '').length === 0) {
+    return {
+      success: false,
+      error: 'Input is empty. Please paste at least one email address.',
+      stats: { total: 0, valid: 0, invalid: 0, inSubmissionDuplicates: 0, dbDuplicates: 0, uploaded: 0 },
+      invalidEmails: [],
+    };
+  }
+
+  // Step 1–6: parse, validate, dedup within submission
+  const { validEmails, invalidEmails, inSubmissionDuplicates } = parseEmailText(emailText);
+
+  const totalTokens =
+    validEmails.length + invalidEmails.length + inSubmissionDuplicates.length;
+
+  if (validEmails.length === 0) {
+    return {
+      success: false,
+      error: 'No valid email addresses found. Please check your input.',
+      stats: {
+        total: totalTokens,
+        valid: 0,
+        invalid: invalidEmails.length,
+        inSubmissionDuplicates: inSubmissionDuplicates.length,
+        dbDuplicates: 0,
+        uploaded: 0,
+      },
+      invalidEmails,
+    };
+  }
+
+  // Step 7: check which valid emails already exist across ALL existing batches
+  const existingBatches = await RecruiterBatch.find(
+    { emails: { $in: validEmails } },
+    { emails: 1, _id: 0 }
+  ).lean();
+
+  const existingEmailSet = new Set();
+  for (const batch of existingBatches) {
+    for (const email of batch.emails) {
+      existingEmailSet.add(email);
+    }
+  }
+
+  const dbDuplicates = validEmails.filter((e) => existingEmailSet.has(e));
+  const newEmails = validEmails.filter((e) => !existingEmailSet.has(e));
+
+  if (newEmails.length === 0) {
+    return {
+      success: false,
+      error: 'All valid emails already exist in the database. Nothing new to upload.',
+      stats: {
+        total: totalTokens,
+        valid: validEmails.length,
+        invalid: invalidEmails.length,
+        inSubmissionDuplicates: inSubmissionDuplicates.length,
+        dbDuplicates: dbDuplicates.length,
+        uploaded: 0,
+      },
+      invalidEmails,
+    };
+  }
+
+  // Step 8–10: store only new valid emails as a single batch
+  const batch = await RecruiterBatch.create({
+    emails: newEmails,
+    emailCount: newEmails.length,
+    uploadedBy: adminUserId,
+    uploadedAt: new Date(),
+  });
+
+  return {
+    success: true,
+    stats: {
+      total: totalTokens,
+      valid: validEmails.length,
+      invalid: invalidEmails.length,
+      inSubmissionDuplicates: inSubmissionDuplicates.length,
+      dbDuplicates: dbDuplicates.length,
+      uploaded: newEmails.length,
+    },
+    invalidEmails,
+    batchId: batch._id.toString(),
+  };
+}
+
+/**
+ * Get paginated batches for admin panel.
+ * Includes all fields except uploadedBy user details.
+ *
+ * @param {number} page - 1-based page
+ * @param {number} limit - batches per page
+ * @returns {{ batches: Array, total: number, page: number, totalPages: number }}
+ */
+export async function getBatchesForAdmin(page = 1, limit = 20) {
   await dbConnect();
 
   const safeLimit = Math.min(Math.max(1, limit), 100);
   const safePage = Math.max(1, page);
   const skip = (safePage - 1) * safeLimit;
 
-  const query = {};
-  if (filters.company_name) {
-    query.company_name = { $regex: filters.company_name.trim(), $options: 'i' };
-  }
-  if (filters.recruiter_name) {
-    query.recruiter_name = { $regex: filters.recruiter_name.trim(), $options: 'i' };
-  }
-  if (filters.recruiter_email) {
-    query.recruiter_email = { $regex: filters.recruiter_email.trim(), $options: 'i' };
-  }
-  if (filters.job_role) {
-    query.job_role = { $regex: filters.job_role.trim(), $options: 'i' };
-  }
-
-  const [records, total] = await Promise.all([
-    RecruiterEmail.find(query)
-      .select('company_name recruiter_name recruiter_email job_role createdAt')
-      .sort({ createdAt: -1 })
+  const [batches, total] = await Promise.all([
+    RecruiterBatch.find()
+      .select('emails emailCount uploadedAt label createdAt')
+      .sort({ uploadedAt: -1 })
       .skip(skip)
       .limit(safeLimit)
       .lean(),
-    RecruiterEmail.countDocuments(query),
+    RecruiterBatch.countDocuments(),
   ]);
 
   return {
-    records,
+    batches,
     total,
     page: safePage,
     totalPages: Math.ceil(total / safeLimit),
@@ -53,165 +217,166 @@ export async function getRecruiterEmails(filters = {}, page = 1, limit = 20) {
 }
 
 /**
- * Add a single recruiter email record.
- * Admin-only operation.
+ * Get paginated batches for premium users.
+ * Does NOT expose uploadedBy, _id is converted to safe public id.
+ * Only returns non-empty batches.
  *
- * @param {object} data - { company_name, recruiter_name, recruiter_email, job_role }
- * @param {string} adminUserId - ID of the admin creating the record
- * @returns {{ success: boolean, record?: object, error?: string, isDuplicate?: boolean }}
+ * @param {number} page - 1-based page
+ * @param {number} limit - batches per page
+ * @returns {{ batches: Array, total: number, page: number, totalPages: number }}
  */
-export async function addRecruiterEmail(data, adminUserId) {
+export async function getBatchesForPremium(page = 1, limit = 20) {
   await dbConnect();
 
-  const { company_name, recruiter_name, recruiter_email, job_role } = data;
+  const safeLimit = Math.min(Math.max(1, limit), 50);
+  const safePage = Math.max(1, page);
+  const skip = (safePage - 1) * safeLimit;
 
-  // Validate required fields
-  if (!company_name?.trim()) return { success: false, error: 'Company name is required' };
-  if (!recruiter_name?.trim()) return { success: false, error: 'Recruiter name is required' };
-  if (!recruiter_email?.trim()) return { success: false, error: 'Recruiter email is required' };
-  if (!job_role?.trim()) return { success: false, error: 'Job role is required' };
-  if (!EMAIL_REGEX.test(recruiter_email.trim())) {
-    return { success: false, error: 'Invalid recruiter email address' };
-  }
+  // Only batches with at least 1 email
+  const query = { emailCount: { $gt: 0 } };
 
-  try {
-    const record = await RecruiterEmail.create({
-      company_name: company_name.trim(),
-      recruiter_name: recruiter_name.trim(),
-      recruiter_email: recruiter_email.trim().toLowerCase(),
-      job_role: job_role.trim(),
-      uploadedBy: adminUserId,
-    });
-    return { success: true, record };
-  } catch (err) {
-    if (err.code === 11000) {
-      return { success: false, error: 'Duplicate record: this recruiter email already exists for this company and role.', isDuplicate: true };
-    }
-    throw err;
-  }
+  const [batches, total] = await Promise.all([
+    RecruiterBatch.find(query)
+      .select('emails emailCount uploadedAt') // explicitly exclude uploadedBy
+      .sort({ uploadedAt: -1 })
+      .skip(skip)
+      .limit(safeLimit)
+      .lean(),
+    RecruiterBatch.countDocuments(query),
+  ]);
+
+  // Return safe public shape — no uploadedBy, no internal _id exposure
+  const safeBatches = batches.map((b) => ({
+    id: b._id.toString(),
+    uploadedAt: b.uploadedAt,
+    emailCount: b.emailCount,
+    emails: b.emails,
+  }));
+
+  return {
+    batches: safeBatches,
+    total,
+    page: safePage,
+    totalPages: Math.ceil(total / safeLimit),
+  };
 }
 
 /**
- * Bulk insert recruiter emails from parsed CSV data.
- * Admin-only operation. Each row is validated individually.
- * Returns detailed stats per row.
- *
- * @param {Array<object>} rows - Array of { company_name, recruiter_name, recruiter_email, job_role }
- * @param {string} adminUserId
- * @returns {{ valid, invalid, duplicate, uploaded, failed, errors: Array<{row, error}> }}
- */
-export async function bulkInsertRecruiterEmails(rows, adminUserId) {
-  await dbConnect();
-
-  let valid = 0;
-  let invalid = 0;
-  let duplicate = 0;
-  let uploaded = 0;
-  let failed = 0;
-  const errors = [];
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowNum = i + 2; // 1-based, +1 for header row
-
-    // Skip empty rows
-    if (!row.company_name && !row.recruiter_name && !row.recruiter_email && !row.job_role) {
-      continue;
-    }
-
-    // Normalize values
-    const company_name = (row.company_name || '').trim();
-    const recruiter_name = (row.recruiter_name || '').trim();
-    const recruiter_email = (row.recruiter_email || '').trim().toLowerCase();
-    const job_role = (row.job_role || '').trim();
-
-    // Validate fields
-    if (!company_name) {
-      invalid++;
-      errors.push({ row: rowNum, error: 'company_name is required' });
-      continue;
-    }
-    if (!recruiter_name) {
-      invalid++;
-      errors.push({ row: rowNum, error: 'recruiter_name is required' });
-      continue;
-    }
-    if (!recruiter_email) {
-      invalid++;
-      errors.push({ row: rowNum, error: 'recruiter_email is required' });
-      continue;
-    }
-    if (!EMAIL_REGEX.test(recruiter_email)) {
-      invalid++;
-      errors.push({ row: rowNum, error: `Invalid email: "${recruiter_email}"` });
-      continue;
-    }
-    if (!job_role) {
-      invalid++;
-      errors.push({ row: rowNum, error: 'job_role is required' });
-      continue;
-    }
-
-    valid++;
-
-    try {
-      await RecruiterEmail.create({
-        company_name,
-        recruiter_name,
-        recruiter_email,
-        job_role,
-        uploadedBy: adminUserId,
-      });
-      uploaded++;
-    } catch (err) {
-      if (err.code === 11000) {
-        duplicate++;
-        errors.push({ row: rowNum, error: `Duplicate: ${recruiter_email} already exists for this company and role` });
-      } else {
-        failed++;
-        errors.push({ row: rowNum, error: err.message });
-      }
-    }
-  }
-
-  return { valid, invalid, duplicate, uploaded, failed, errors };
-}
-
-/**
- * Delete a single recruiter email record by ID.
+ * Delete a single batch by ID.
  * Admin-only operation.
  *
- * @param {string} id - RecruiterEmail document ID
- * @returns {boolean} true if deleted, false if not found
+ * @param {string} batchId
+ * @returns {boolean} true if deleted, false if not found or invalid ID
  */
-export async function deleteRecruiterEmail(id) {
+export async function deleteBatch(batchId) {
   await dbConnect();
 
-  if (!mongoose.Types.ObjectId.isValid(id)) return false;
+  if (!mongoose.Types.ObjectId.isValid(batchId)) return false;
 
-  const result = await RecruiterEmail.findByIdAndDelete(id);
+  const result = await RecruiterBatch.findByIdAndDelete(batchId);
   return !!result;
 }
 
 /**
- * Bulk delete recruiter email records by an array of IDs.
- * Admin-only operation. Only deletes valid ObjectId entries.
+ * Bulk delete batches by array of IDs.
+ * Admin-only operation. Silently skips invalid ObjectIds.
  *
- * @param {string[]} ids - Array of RecruiterEmail document IDs
+ * @param {string[]} batchIds
  * @returns {{ deletedCount: number }}
  */
-export async function bulkDeleteRecruiterEmails(ids) {
+export async function bulkDeleteBatches(batchIds) {
   await dbConnect();
 
-  if (!Array.isArray(ids) || ids.length === 0) {
+  if (!Array.isArray(batchIds) || batchIds.length === 0) {
     return { deletedCount: 0 };
   }
 
-  // Filter to valid ObjectIds only to avoid errors and prevent deleting unrelated records
-  const validIds = ids.filter((id) => mongoose.Types.ObjectId.isValid(id));
-
+  const validIds = batchIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
   if (validIds.length === 0) return { deletedCount: 0 };
 
-  const result = await RecruiterEmail.deleteMany({ _id: { $in: validIds } });
+  const result = await RecruiterBatch.deleteMany({ _id: { $in: validIds } });
   return { deletedCount: result.deletedCount };
+}
+
+/**
+ * One-time migration: reads all legacy RecruiterEmail flat records and
+ * groups them into a single RecruiterBatch marked as "Migrated Legacy Data".
+ *
+ * Safe to call multiple times — idempotent via label check.
+ * Does NOT delete legacy RecruiterEmail records.
+ *
+ * @returns {{ migrated: boolean, emailCount: number, message: string }}
+ */
+export async function migrateLegacyEmails() {
+  await dbConnect();
+
+  // Skip if migration batch already exists
+  const existing = await RecruiterBatch.findOne({ label: 'migrated_legacy' }).lean();
+  if (existing) {
+    return {
+      migrated: false,
+      emailCount: 0,
+      message: 'Migration already completed previously. Skipped.',
+    };
+  }
+
+  // Dynamically import the old model to avoid circular deps
+  let RecruiterEmail;
+  try {
+    const mod = await import('@/lib/models/RecruiterEmail.js');
+    RecruiterEmail = mod.default;
+  } catch {
+    return { migrated: false, emailCount: 0, message: 'Legacy RecruiterEmail model not found. Skipped.' };
+  }
+
+  const legacyRecords = await RecruiterEmail.find({})
+    .select('recruiter_email uploadedBy createdAt')
+    .lean();
+
+  if (legacyRecords.length === 0) {
+    return { migrated: false, emailCount: 0, message: 'No legacy records found. Skipped.' };
+  }
+
+  // Deduplicate legacy emails
+  const seen = new Set();
+  const emails = [];
+  let earliestDate = new Date();
+  let uploadedBy = null;
+
+  for (const rec of legacyRecords) {
+    const email = (rec.recruiter_email || '').toLowerCase().trim();
+    if (email && !seen.has(email)) {
+      seen.add(email);
+      emails.push(email);
+    }
+    if (rec.createdAt && rec.createdAt < earliestDate) {
+      earliestDate = rec.createdAt;
+    }
+    if (!uploadedBy && rec.uploadedBy) {
+      uploadedBy = rec.uploadedBy;
+    }
+  }
+
+  if (emails.length === 0) {
+    return { migrated: false, emailCount: 0, message: 'No valid emails in legacy records. Skipped.' };
+  }
+
+  // Use a fallback system admin ID if no uploadedBy exists
+  const adminId =
+    uploadedBy ||
+    new mongoose.Types.ObjectId('000000000000000000000000');
+
+  await RecruiterBatch.create({
+    emails,
+    emailCount: emails.length,
+    uploadedBy: adminId,
+    uploadedAt: earliestDate,
+    label: 'migrated_legacy',
+  });
+
+  return {
+    migrated: true,
+    emailCount: emails.length,
+    message: `Migrated ${emails.length} email(s) from legacy RecruiterEmail records into one batch.`,
+  };
 }
