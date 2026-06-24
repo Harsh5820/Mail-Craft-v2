@@ -64,6 +64,7 @@ export default function Sidebar() {
   }, [pathname]);
 
   const initials = session?.user?.name?.[0]?.toUpperCase() || '?';
+  const isPremium = session?.user?.plan !== 'free' || session?.user?.role === 'admin';
 
   return (
     <>
@@ -108,17 +109,20 @@ export default function Sidebar() {
               </Link>
             );
           })}
-          {/* Recruiter Emails: visible to premium users and admins */}
-          {(session?.user?.plan !== 'free' || session?.user?.role === 'admin') && (
-            <Link
-              href="/dashboard/recruiter-emails"
-              title="Recruiter Emails"
-              className={`sidebar-link ${pathname.startsWith('/dashboard/recruiter-emails') ? 'active' : ''}`}
-            >
-              <Briefcase className="w-[18px] h-[18px] flex-shrink-0" />
-              <span className="hidden xl:inline">Recruiter Emails</span>
-            </Link>
-          )}
+          {/* Recruiter Emails: visible to everyone, PRO badge for free users */}
+          <Link
+            href="/dashboard/recruiter-emails"
+            title="Recruiter Emails"
+            className={`sidebar-link ${pathname.startsWith('/dashboard/recruiter-emails') ? 'active' : ''}`}
+          >
+            <Briefcase className="w-[18px] h-[18px] flex-shrink-0" />
+            <span className="hidden xl:inline">Recruiter Emails</span>
+            {!isPremium && (
+              <span className="hidden xl:inline text-[9px] font-bold uppercase tracking-wider bg-warning/20 text-warning px-1.5 py-0.5 rounded ml-auto">
+                Pro
+              </span>
+            )}
+          </Link>
           {session?.user?.role === 'admin' && (
             <Link
               href="/dashboard/admin"
@@ -321,19 +325,22 @@ export default function Sidebar() {
                   Admin
                 </Link>
               )}
-              {(session?.user?.plan !== 'free' || session?.user?.role === 'admin') && (
-                <Link
-                  href="/dashboard/recruiter-emails"
-                  className={`flex items-center gap-3 p-3 rounded-xl border text-sm font-medium text-surface-200 transition-all ${
-                    pathname.startsWith('/dashboard/recruiter-emails')
-                      ? 'border-primary-500 bg-primary-600/10 text-primary-400'
-                      : 'border-surface-800 bg-surface-800/40 hover:border-surface-700'
-                  }`}
-                >
-                  <Briefcase className="w-[18px] h-[18px]" />
-                  Recruiter Emails
-                </Link>
-              )}
+              <Link
+                href="/dashboard/recruiter-emails"
+                className={`flex items-center gap-3 p-3 rounded-xl border text-sm font-medium text-surface-200 transition-all ${
+                  pathname.startsWith('/dashboard/recruiter-emails')
+                    ? 'border-primary-500 bg-primary-600/10 text-primary-400'
+                    : 'border-surface-800 bg-surface-800/40 hover:border-surface-700'
+                }`}
+              >
+                <Briefcase className="w-[18px] h-[18px]" />
+                <span>Recruiter Emails</span>
+                {!isPremium && (
+                  <span className="text-[10px] font-bold uppercase bg-warning/20 text-warning px-2 py-0.5 rounded-full ml-auto">
+                    Pro
+                  </span>
+                )}
+              </Link>
             </div>
 
             {/* Bottom Actions: Theme Selector & Log Out */}

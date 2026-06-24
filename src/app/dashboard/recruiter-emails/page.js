@@ -135,27 +135,45 @@ function EmailBatchCard({ batch, onStartCampaign }) {
           aria-label="Email address list"
         >
           <ul className="divide-y divide-surface-800/30">
-            {batch.emails.map((email, idx) => {
-              const isLocked = email === '__LOCKED__';
+            {(() => {
+              const validEmails = batch.emails.filter(e => e !== '__LOCKED__');
+              const lockedCount = batch.emails.filter(e => e === '__LOCKED__').length;
+              
+              const fakeEmails = [
+                'tech.recruiter@google.com', 'hiring.manager@meta.com', 'talent.acquisition@netflix.com',
+                'engineering.lead@amazon.com', 'hr.partner@apple.com', 'startup.founder@stripe.com',
+                'careers@spotify.com', 'jobs@airbnb.com'
+              ];
+
               return (
-                <li
-                  key={idx}
-                  className={`py-2 text-sm font-mono break-all leading-relaxed flex items-center gap-2 ${
-                    isLocked ? 'text-surface-500 select-none' : 'text-surface-200 select-all'
-                  }`}
-                >
-                  {isLocked ? (
-                    <div className="flex items-center gap-2 w-full">
-                      <Lock className="w-3.5 h-3.5 text-warning/70 shrink-0" />
-                      <span className="blur-sm opacity-50 select-none flex-1 overflow-hidden">hidden.email@example.com</span>
-                      <span className="text-[10px] text-warning/80 font-sans uppercase tracking-wider ml-auto bg-warning/10 px-2 py-0.5 rounded-full shrink-0">Premium</span>
+                <>
+                  {validEmails.map((email, idx) => (
+                    <li key={`valid-${idx}`} className="py-2 text-sm font-mono break-all leading-relaxed flex items-center gap-2 text-surface-200 select-all">
+                      {email}
+                    </li>
+                  ))}
+                  
+                  {lockedCount > 0 && (
+                    <div className="relative mt-2">
+                      <ul className="divide-y divide-surface-800/30 overflow-hidden" style={{ maxHeight: '200px' }}>
+                        {fakeEmails.slice(0, Math.max(3, lockedCount)).map((fake, idx) => (
+                          <li key={`fake-${idx}`} className="py-2 text-sm font-mono break-all leading-relaxed flex items-center gap-2 text-surface-500 select-none blur-[4px] opacity-60">
+                            {fake}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/60 to-transparent flex flex-col items-center justify-end pb-4">
+                        <Link href="/dashboard/settings" className="btn bg-warning text-yellow-950 hover:bg-warning/90 shadow-2xl shadow-warning/20 flex flex-col items-center px-6 py-3 border-none ring-1 ring-warning/30">
+                          <Lock className="w-5 h-5 mb-1" />
+                          <span className="font-bold">Unlock {lockedCount} Premium Emails</span>
+                          <span className="text-[10px] uppercase tracking-wider opacity-80 mt-0.5">Upgrade Required</span>
+                        </Link>
+                      </div>
                     </div>
-                  ) : (
-                    email
                   )}
-                </li>
+                </>
               );
-            })}
+            })()}
           </ul>
         </div>
       </div>

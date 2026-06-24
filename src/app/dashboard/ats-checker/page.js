@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, CheckCircle2, AlertCircle, Award, Target, ChevronRight, BarChart } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { FileText, CheckCircle2, AlertCircle, Award, Target, ChevronRight, BarChart, Lock } from 'lucide-react';
 import { showToast } from '@/components/ui/Toast';
 import Link from 'next/link';
 
 export default function AtsCheckerPage() {
+  const { data: session } = useSession();
+  const isPremium = session?.user?.plan !== 'free' || session?.user?.role === 'admin';
+  
   const [resumeText, setResumeText] = useState('');
   const [targetRole, setTargetRole] = useState('');
   const [loading, setLoading] = useState(false);
@@ -115,11 +119,52 @@ export default function AtsCheckerPage() {
         <div className="space-y-6">
           {result ? (
             <div className="animate-slide-up space-y-4">
-              {/* Score Card */}
-              <div className={`card text-center py-8 border-2 ${getScoreColor(result.score)} transition-all duration-500`}>
-                <p className="text-sm font-medium uppercase tracking-wider mb-2 opacity-80">ATS Match Score</p>
-                <div className="text-6xl font-black mb-2">{result.score}<span className="text-2xl opacity-50">/100</span></div>
-                <p className="text-sm opacity-80 px-4">{result.analysis}</p>
+              {/* Score Gauge */}
+              <div className="card text-center py-8 border-2 bg-surface-900 border-surface-800 transition-all duration-500 relative overflow-hidden">
+                <p className="text-sm font-medium uppercase tracking-wider mb-6 opacity-80">ATS Match Score</p>
+                
+                <div className="relative w-56 h-32 mx-auto flex items-end justify-center">
+                  <svg className="absolute top-0 left-0 w-full h-full" viewBox="0 0 200 120">
+                    <defs>
+                      <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#ef4444" />
+                        <stop offset="50%" stopColor="#f59e0b" />
+                        <stop offset="100%" stopColor="#10b981" />
+                      </linearGradient>
+                    </defs>
+                    {/* Background track */}
+                    <path
+                      d="M 20 100 A 80 80 0 0 1 180 100"
+                      fill="none"
+                      stroke="rgba(255,255,255,0.05)"
+                      strokeWidth="16"
+                      strokeLinecap="round"
+                    />
+                    {/* Progress arc */}
+                    <path
+                      d="M 20 100 A 80 80 0 0 1 180 100"
+                      fill="none"
+                      stroke="url(#gaugeGradient)"
+                      strokeWidth="16"
+                      strokeLinecap="round"
+                      strokeDasharray={80 * Math.PI}
+                      strokeDashoffset={(80 * Math.PI) * (1 - (result.score / 100))}
+                      style={{ transition: 'stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+                    />
+                  </svg>
+                  
+                  {/* Score text inside the gauge */}
+                  <div className="flex flex-col items-center mb-1 z-10">
+                    <div className="text-6xl font-black leading-none" style={{ color: result.score >= 80 ? '#10b981' : result.score >= 60 ? '#f59e0b' : '#ef4444' }}>
+                      {result.score}
+                    </div>
+                    <div className="text-xs font-bold uppercase tracking-widest mt-2" style={{ color: result.score >= 80 ? '#10b981' : result.score >= 60 ? '#f59e0b' : '#ef4444' }}>
+                      {result.score >= 80 ? 'Excellent' : result.score >= 60 ? 'Average' : 'Needs Work'}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-sm opacity-80 px-4 mt-6 max-w-md mx-auto leading-relaxed">{result.analysis}</p>
               </div>
 
               {/* Strengths */}
@@ -143,13 +188,42 @@ export default function AtsCheckerPage() {
                   <AlertCircle className="w-4 h-4" /> Areas for Improvement
                 </h3>
                 <ul className="space-y-2">
-                  {result.improvements?.map((item, i) => (
+                  {result.improvements?.slice(0, isPremium ? undefined : 3).map((item, i) => (
                     <li key={i} className="text-sm text-surface-200 flex items-start gap-2">
                       <span className="text-warning mt-0.5">•</span>
                       <span>{item}</span>
                     </li>
                   ))}
                 </ul>
+                {!isPremium && (
+                  <div className="mt-4 pt-4 border-t border-warning/20 flex flex-col items-center text-center relative overflow-hidden">
+                    {/* If we only have 3 or fewer items, inject some fake blurred ones so it looks full */}
+                    {result.improvements?.length <= 3 && (
+                       <div className="w-full space-y-3 mb-4 px-2 opacity-40 blur-[2px] pointer-events-none select-none">
+                         <div className="flex items-start gap-2">
+                           <span className="text-warning mt-0.5">•</span>
+                           <div className="h-4 bg-warning/20 rounded w-full mt-1" />
+                         </div>
+                         <div className="flex items-start gap-2">
+                           <span className="text-warning mt-0.5">•</span>
+                           <div className="h-4 bg-warning/20 rounded w-5/6 mt-1" />
+                         </div>
+                       </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-warning/10 via-warning/5 to-transparent pointer-events-none" />
+                    <div className="relative z-10 w-full px-4">
+                      <p className="text-sm font-medium text-warning mb-3 blur-[0.5px]">
+                        {result.improvements?.length > 3 
+                          ? `And ${result.improvements.length - 3} more critical insights...`
+                          : "Unlock the remaining critical ATS insights..."}
+                      </p>
+                      <Link href="/dashboard/settings" className="btn bg-gradient-to-r from-warning to-yellow-500 text-yellow-950 hover:from-yellow-400 hover:to-yellow-500 w-full flex items-center justify-center gap-2 shadow-xl shadow-warning/20 border-none font-bold">
+                        <Lock className="w-4 h-4" />
+                        Unlock Premium to see all
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

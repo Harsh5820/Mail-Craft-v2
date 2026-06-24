@@ -306,7 +306,7 @@ export default function ProfilePage() {
             </div>
           </div>
           <div className="bg-surface-900/50 p-4 rounded-xl border border-surface-800">
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">Your Referral Link</label>
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">Your Referral Link</label>
             <div className="flex items-center gap-2">
               <input 
                 className="input text-xs font-mono" 
@@ -364,16 +364,19 @@ export default function ProfilePage() {
       </div>
 
       {/* Basic Info */}
-      <div className="card mb-4">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-primary-600/15 flex items-center justify-center">
-            <User className="w-4 h-4 text-primary-400" />
+      <div className="card p-0 mb-6 overflow-hidden">
+        <div className="flex items-center gap-3 p-5 border-b border-surface-800/60 bg-surface-900/30">
+          <div className="w-10 h-10 rounded-xl bg-primary-600/10 flex items-center justify-center">
+            <User className="w-5 h-5 text-primary-400" />
           </div>
-          <h2 className="text-lg font-semibold text-surface-100">Basic Info</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">Full Name</label>
+            <h2 className="text-lg font-semibold text-surface-100">Basic Information</h2>
+            <p className="text-xs text-surface-400">Core identity and contact details.</p>
+          </div>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+          <div>
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">Full Name</label>
             <input
               className="input"
               placeholder="Nilesh Raut"
@@ -382,11 +385,11 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">Email</label>
             <input className="input opacity-60" value={session?.user?.email || ''} disabled />
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">Headline / Title</label>
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">Headline / Title</label>
             <input
               className="input"
               placeholder="Full Stack Developer | React & Node.js"
@@ -395,7 +398,7 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">
               <MapPin className="w-3 h-3 inline mr-1" />Location
             </label>
             <input
@@ -406,7 +409,7 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">
               <Phone className="w-3 h-3 inline mr-1" />Contact Number 1
             </label>
             <input
@@ -417,7 +420,7 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">
               <Phone className="w-3 h-3 inline mr-1" />Contact Number 2
             </label>
             <input
@@ -431,16 +434,19 @@ export default function ProfilePage() {
       </div>
 
       {/* Professional Info */}
-      <div className="card mb-4">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-info/15 flex items-center justify-center">
-            <Briefcase className="w-4 h-4 text-info" />
+      <div className="card p-0 mb-6 overflow-hidden">
+        <div className="flex items-center gap-3 p-5 border-b border-surface-800/60 bg-surface-900/30">
+          <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
+            <Briefcase className="w-5 h-5 text-info" />
           </div>
-          <h2 className="text-lg font-semibold text-surface-100">Professional Details</h2>
-        </div>
-        <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">
+            <h2 className="text-lg font-semibold text-surface-100">Professional Details</h2>
+            <p className="text-xs text-surface-400">Highlight your expertise for campaigns.</p>
+          </div>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">
               <Award className="w-3 h-3 inline mr-1" />Skills
             </label>
             <input
@@ -449,32 +455,35 @@ export default function ProfilePage() {
               value={profile.skills}
               onChange={(e) => updateField('skills', e.target.value)}
             />
-            <p className="text-[10px] text-surface-600 mt-1">Comma-separated. These fill the {'{{skills}}'} placeholder in templates.</p>
+            <p className="text-[11px] text-surface-500 mt-1.5">Comma-separated. These fill the {'{{skills}}'} placeholder in templates.</p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">Experience</label>
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">Experience</label>
             <input
               className="input"
               placeholder="3 years in Full Stack Development"
               value={profile.experience}
               onChange={(e) => updateField('experience', e.target.value)}
             />
-            <p className="text-[10px] text-surface-600 mt-1">Fills the {'{{experience}}'} placeholder in templates.</p>
+            <p className="text-[11px] text-surface-500 mt-1.5">Fills the {'{{experience}}'} placeholder in templates.</p>
           </div>
         </div>
       </div>
 
       {/* Links */}
-      <div className="card mb-4">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-8 h-8 rounded-lg bg-success/15 flex items-center justify-center">
-            <Link2 className="w-4 h-4 text-success" />
+      <div className="card p-0 mb-6 overflow-hidden">
+        <div className="flex items-center gap-3 p-5 border-b border-surface-800/60 bg-surface-900/30">
+          <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
+            <Link2 className="w-5 h-5 text-success" />
           </div>
-          <h2 className="text-lg font-semibold text-surface-100">Links</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">
+            <h2 className="text-lg font-semibold text-surface-100">Web Links</h2>
+            <p className="text-xs text-surface-400">Your online presence and portfolios.</p>
+          </div>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+          <div>
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">
               <Link2 className="w-3 h-3 inline mr-1" />LinkedIn
             </label>
             <input
@@ -485,7 +494,7 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">
               <Code2 className="w-3 h-3 inline mr-1" />GitHub
             </label>
             <input
@@ -496,7 +505,7 @@ export default function ProfilePage() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-surface-400 mb-1.5">
+            <label className="block text-sm font-medium text-surface-200 mb-1.5">
               <Globe className="w-3 h-3 inline mr-1" />Portfolio / Website
             </label>
             <input
