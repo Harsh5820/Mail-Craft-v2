@@ -35,9 +35,9 @@ export default function Toast() {
   if (items.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3">
+    <div className="fixed z-[100] flex flex-col gap-3 pointer-events-none bottom-24 left-4 right-auto items-start lg:bottom-6 lg:right-6 lg:left-auto lg:items-end">
       {items.map((t) => (
-        <div key={t.id} className={`toast toast-${t.type}`}>
+        <div key={t.id} className={`toast toast-${t.type} pointer-events-auto w-auto max-w-[85vw] lg:max-w-sm text-left backdrop-blur-md shadow-xl`}>
           {t.message}
         </div>
       ))}

@@ -15,6 +15,8 @@ export default function DashboardLayout({ children }) {
         <main className="flex-1 overflow-y-auto w-full">
           <div className="w-full max-w-7xl mx-auto p-6 lg:p-8 md:p-4 sm:p-3">
             {children}
+            {/* Spacer for mobile bottom nav */}
+            <div className="h-24 lg:hidden block w-full shrink-0" />
           </div>
         </main>
         <Toast />
