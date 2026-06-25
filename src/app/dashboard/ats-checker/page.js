@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { FileText, CheckCircle2, AlertCircle, Award, Target, ChevronRight, BarChart, Lock } from 'lucide-react';
 import { showToast } from '@/components/ui/Toast';
@@ -14,6 +14,20 @@ export default function AtsCheckerPage() {
   const [targetRole, setTargetRole] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [remainingChecks, setRemainingChecks] = useState(null);
+
+  useEffect(() => {
+    const fetchLimit = async () => {
+      try {
+        const res = await fetch('/api/ai/ats-check');
+        const data = await res.json();
+        if (res.ok && typeof data.remaining !== 'undefined') {
+          setRemainingChecks(data.remaining);
+        }
+      } catch (err) {}
+    };
+    fetchLimit();
+  }, []);
 
   const handleCheck = async (e) => {
     e.preventDefault();
@@ -42,6 +56,9 @@ export default function AtsCheckerPage() {
       }
 
       setResult(data);
+      if (typeof data.remainingChecks !== 'undefined') {
+        setRemainingChecks(data.remainingChecks);
+      }
       showToast(`Score calculated! (${data.remainingChecks} checks remaining this month)`);
     } catch (err) {
       showToast(err.message || 'Failed to check ATS score', 'error');
@@ -99,11 +116,14 @@ export default function AtsCheckerPage() {
               />
             </div>
 
-            <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 mb-4">
-              <p className="text-xs text-warning flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" /> Limit: 15 checks per month.
-              </p>
-            </div>
+            {remainingChecks !== null && (
+              <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 flex gap-2 items-start text-warning mb-6">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <p className="text-sm">
+                  Limit: {remainingChecks} checks remaining this month.
+                </p>
+              </div>
+            )}
 
             <button type="submit" className="btn btn-primary w-full" disabled={loading || !resumeText || !targetRole}>
               {loading ? (
@@ -120,51 +140,100 @@ export default function AtsCheckerPage() {
           {result ? (
             <div className="animate-slide-up space-y-4">
               {/* Score Gauge */}
-              <div className="card text-center py-8 border-2 bg-surface-900 border-surface-800 transition-all duration-500 relative overflow-hidden">
-                <p className="text-sm font-medium uppercase tracking-wider mb-6 opacity-80">ATS Match Score</p>
-                
-                <div className="relative w-56 h-32 mx-auto flex items-end justify-center">
-                  <svg className="absolute top-0 left-0 w-full h-full" viewBox="0 0 200 120">
+              <div className="card text-center py-6 border-2 bg-surface-900 border-surface-800 transition-all duration-500 relative overflow-hidden">
+                <div className="relative w-full max-w-sm mx-auto flex items-end justify-center">
+                  <svg className="w-full h-auto" viewBox="0 0 200 150">
                     <defs>
-                      <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#ef4444" />
-                        <stop offset="50%" stopColor="#f59e0b" />
-                        <stop offset="100%" stopColor="#10b981" />
-                      </linearGradient>
+                      <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
+                      <filter id="glow-orange" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
+                      <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
                     </defs>
+                    
                     {/* Background track */}
+                    <path d="M 30 100 A 70 70 0 0 1 170 100" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="14" strokeLinecap="butt" />
+
+                    {/* Red Segment (0-50) */}
                     <path
-                      d="M 20 100 A 80 80 0 0 1 180 100"
-                      fill="none"
-                      stroke="rgba(255,255,255,0.05)"
-                      strokeWidth="16"
-                      strokeLinecap="round"
+                      d="M 30 100 A 70 70 0 0 1 170 100" fill="none" stroke="#ef4444" strokeWidth="14" strokeLinecap="butt"
+                      strokeDasharray="108 219.91" strokeDashoffset="0"
+                      opacity={result.score <= 50 ? 1 : 0.3}
+                      filter={result.score <= 50 ? "url(#glow-red)" : ""}
+                      style={{ transition: 'all 0.5s ease' }}
                     />
-                    {/* Progress arc */}
+                    
+                    {/* Orange Segment (50-75) */}
                     <path
-                      d="M 20 100 A 80 80 0 0 1 180 100"
-                      fill="none"
-                      stroke="url(#gaugeGradient)"
-                      strokeWidth="16"
-                      strokeLinecap="round"
-                      strokeDasharray={80 * Math.PI}
-                      strokeDashoffset={(80 * Math.PI) * (1 - (result.score / 100))}
-                      style={{ transition: 'stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+                      d="M 30 100 A 70 70 0 0 1 170 100" fill="none" stroke="#f97316" strokeWidth="14" strokeLinecap="butt"
+                      strokeDasharray="53 219.91" strokeDashoffset="-110"
+                      opacity={result.score > 50 && result.score <= 75 ? 1 : 0.3}
+                      filter={result.score > 50 && result.score <= 75 ? "url(#glow-orange)" : ""}
+                      style={{ transition: 'all 0.5s ease' }}
                     />
-                  </svg>
-                  
-                  {/* Score text inside the gauge */}
-                  <div className="flex flex-col items-center mb-1 z-10">
-                    <div className="text-6xl font-black leading-none" style={{ color: result.score >= 80 ? '#10b981' : result.score >= 60 ? '#f59e0b' : '#ef4444' }}>
+                    
+                    {/* Green Segment (75-100) */}
+                    <path
+                      d="M 30 100 A 70 70 0 0 1 170 100" fill="none" stroke="#10b981" strokeWidth="14" strokeLinecap="butt"
+                      strokeDasharray="54 219.91" strokeDashoffset="-165"
+                      opacity={result.score > 75 ? 1 : 0.3}
+                      filter={result.score > 75 ? "url(#glow-green)" : ""}
+                      style={{ transition: 'all 0.5s ease' }}
+                    />
+
+                    {/* Ticks and Labels */}
+                    <g fill="currentColor" className="text-surface-400" stroke="currentColor" strokeWidth="1.5">
+                      {/* 0 */}
+                      <line x1="30" y1="100" x2="22" y2="100" />
+                      <text x="12" y="103" fontSize="8" stroke="none" textAnchor="middle">0</text>
+                      
+                      {/* 25 */}
+                      <line x1="50.5" y1="50.5" x2="44.8" y2="44.8" />
+                      <text x="35" y="42" fontSize="8" stroke="none" textAnchor="middle">25</text>
+                      
+                      {/* 50 */}
+                      <line x1="100" y1="30" x2="100" y2="22" />
+                      <text x="100" y="16" fontSize="8" stroke="none" textAnchor="middle">50</text>
+                      
+                      {/* 75 */}
+                      <line x1="149.5" y1="50.5" x2="155.2" y2="44.8" />
+                      <text x="165" y="42" fontSize="8" stroke="none" textAnchor="middle">75</text>
+                      
+                      {/* 90 */}
+                      <line x1="166.5" y1="78.4" x2="174" y2="76" />
+                      <text x="185" y="78" fontSize="8" stroke="none" textAnchor="middle">90</text>
+                      
+                      {/* 100 */}
+                      <line x1="170" y1="100" x2="178" y2="100" />
+                      <text x="190" y="103" fontSize="8" stroke="none" textAnchor="middle">100</text>
+                    </g>
+
+                    {/* Needle */}
+                    <g transform={`translate(100, 100) rotate(${(result.score / 100) * 180 - 180})`} style={{ transition: 'transform 1.5s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                      <polygon points="-5,-4 -5,4 62,0" fill={result.score > 75 ? '#10b981' : result.score > 50 ? '#f97316' : '#ef4444'} />
+                    </g>
+
+                    {/* Central Text Overlays */}
+                    <text x="100" y="105" fontSize="48" fontWeight="900" fill="currentColor" className="text-surface-100" textAnchor="middle" style={{ textShadow: '0px 4px 12px rgba(0,0,0,0.5)' }}>
                       {result.score}
-                    </div>
-                    <div className="text-xs font-bold uppercase tracking-widest mt-2" style={{ color: result.score >= 80 ? '#10b981' : result.score >= 60 ? '#f59e0b' : '#ef4444' }}>
-                      {result.score >= 80 ? 'Excellent' : result.score >= 60 ? 'Average' : 'Needs Work'}
-                    </div>
-                  </div>
+                    </text>
+                    <text x="100" y="125" fontSize="14" fontWeight="800" fill={result.score > 75 ? '#10b981' : result.score > 50 ? '#f97316' : '#ef4444'} textAnchor="middle">
+                      {result.score > 75 ? 'GOOD' : result.score > 50 ? 'AVERAGE' : 'POOR'}
+                    </text>
+                    <text x="100" y="140" fontSize="10" fontWeight="600" fill="currentColor" className="text-surface-400" textAnchor="middle">
+                      ATS MATCH SCORE
+                    </text>
+                  </svg>
                 </div>
 
-                <p className="text-sm opacity-80 px-4 mt-6 max-w-md mx-auto leading-relaxed">{result.analysis}</p>
+                <p className="text-sm opacity-80 px-4 mt-2 max-w-md mx-auto leading-relaxed">{result.analysis}</p>
               </div>
 
               {/* Strengths */}

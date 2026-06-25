@@ -3,6 +3,22 @@ import { getSession } from '@/lib/auth';
 import dbConnect from '@/lib/db';
 import { canCheckAts, incrementAtsCount, checkAtsScore } from '@/services/ai.service';
 
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await dbConnect();
+    const check = await canCheckAts(session.user.id);
+    
+    return NextResponse.json(check);
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to fetch limits' }, { status: 500 });
+  }
+}
+
 export async function POST(req) {
   try {
     const session = await getSession();

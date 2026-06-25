@@ -106,6 +106,11 @@ export default function Sidebar() {
               >
                 <Icon className="w-[18px] h-[18px] flex-shrink-0" />
                 <span className="hidden xl:inline">{item.label}</span>
+                {!isPremium && item.href === '/dashboard/ats-checker' && (
+                  <span className="hidden xl:inline text-[9px] font-bold uppercase tracking-wider bg-warning/20 text-warning px-1.5 py-0.5 rounded ml-auto">
+                    Pro
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -288,7 +293,12 @@ export default function Sidebar() {
                 }`}
               >
                 <Award className="w-[18px] h-[18px]" />
-                ATS Checker
+                <span>ATS Checker</span>
+                {!isPremium && (
+                  <span className="text-[10px] font-bold uppercase bg-warning/20 text-warning px-2 py-0.5 rounded-full ml-auto">
+                    Pro
+                  </span>
+                )}
               </Link>
               <Link
                 href="/dashboard/analytics"

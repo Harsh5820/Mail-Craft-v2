@@ -97,6 +97,10 @@ const UserSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    onboardingCompleted: {
+      type: Boolean,
+      default: false, // Default to false so existing users also see the onboarding flow
+    },
   },
   {
     timestamps: true,
@@ -114,7 +118,7 @@ UserSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-if (mongoose.models.User && !mongoose.models.User.schema.paths.resetPasswordToken) {
+if (mongoose.models.User && (!mongoose.models.User.schema.paths.resetPasswordToken || !mongoose.models.User.schema.paths.onboardingCompleted)) {
   delete mongoose.models.User;
 }
 

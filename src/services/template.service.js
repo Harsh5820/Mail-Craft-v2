@@ -4,9 +4,25 @@ import Template from '@/lib/models/Template';
 /**
  * Get all templates for a user
  */
-export async function getUserTemplates(userId) {
+export async function getUserTemplates(userId, page = 1, limit = 20) {
   await dbConnect();
-  return Template.find({ userId }).sort({ createdAt: -1 }).lean();
+  const skip = (page - 1) * limit;
+
+  const [templates, total] = await Promise.all([
+    Template.find({ userId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Template.countDocuments({ userId })
+  ]);
+
+  return {
+    templates,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
 }
 
 export async function getTemplate(templateId, userId) {

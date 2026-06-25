@@ -216,14 +216,11 @@ export default function ProfilePage() {
           {planExpiresAt && plan !== 'free' && (
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Clock className="w-4 h-4 text-warning animate-pulse" />
-                <p className="text-xs font-medium text-surface-400">Time Remaining</p>
+                <Clock className="w-4 h-4 text-warning" />
+                <p className="text-xs font-medium text-surface-400">Plan Expiry</p>
               </div>
-              <p className="text-lg font-black text-warning animate-pulse">
-                {timeLeft || 'Calculating...'}
-              </p>
-              <p className="text-xs text-surface-500 mt-1">
-                Expiry: <span className="font-semibold text-surface-300">{new Date(planExpiresAt).toLocaleString()}</span>
+              <p className="text-lg font-black text-warning">
+                {new Date(planExpiresAt).toLocaleDateString('en-GB')}
               </p>
               {planInfo?.status === 'expiring_soon' && (
                 <p className="text-xs text-warning mt-2 font-semibold">⚠️ Expiring soon (under 24 hours)!</p>
@@ -410,24 +407,33 @@ export default function ProfilePage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-surface-200 mb-1.5">
-              <Phone className="w-3 h-3 inline mr-1" />Contact Number 1
+              <Phone className="w-3 h-3 inline mr-1" />Personal No
             </label>
             <input
+              type="tel"
               className="input"
               placeholder="+91 99999 99999"
               value={profile.contact_number_1}
               onChange={(e) => updateField('contact_number_1', e.target.value)}
+              maxLength={15}
+              minLength={10}
+              pattern="[\+]?[0-9\s\-]*"
+              title="Enter a valid phone number"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-surface-200 mb-1.5">
-              <Phone className="w-3 h-3 inline mr-1" />Contact Number 2
+              <Phone className="w-3 h-3 inline mr-1" />Alternative No
             </label>
             <input
+              type="tel"
               className="input"
-              placeholder="Alternate contact number"
+              placeholder="Alternative contact number"
               value={profile.contact_number_2}
               onChange={(e) => updateField('contact_number_2', e.target.value)}
+              maxLength={15}
+              pattern="[\+]?[0-9\s\-]*"
+              title="Enter a valid phone number"
             />
           </div>
         </div>
@@ -487,10 +493,12 @@ export default function ProfilePage() {
               <Link2 className="w-3 h-3 inline mr-1" />LinkedIn
             </label>
             <input
+              type="url"
               className="input"
               placeholder="https://linkedin.com/in/yourprofile"
               value={profile.linkedin}
               onChange={(e) => updateField('linkedin', e.target.value)}
+              title="Enter a valid URL starting with http:// or https://"
             />
           </div>
           <div>
@@ -498,10 +506,12 @@ export default function ProfilePage() {
               <Code2 className="w-3 h-3 inline mr-1" />GitHub
             </label>
             <input
+              type="url"
               className="input"
-              placeholder="https://github.com/yourusername"
+              placeholder="https://github.com/username"
               value={profile.github}
               onChange={(e) => updateField('github', e.target.value)}
+              title="Enter a valid URL starting with http:// or https://"
             />
           </div>
           <div>
@@ -509,10 +519,12 @@ export default function ProfilePage() {
               <Globe className="w-3 h-3 inline mr-1" />Portfolio / Website
             </label>
             <input
+              type="url"
               className="input"
               placeholder="https://yourportfolio.com"
               value={profile.portfolio}
               onChange={(e) => updateField('portfolio', e.target.value)}
+              title="Enter a valid URL starting with http:// or https://"
             />
           </div>
         </div>

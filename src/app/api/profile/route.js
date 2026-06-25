@@ -71,12 +71,14 @@ export async function PUT(req) {
     }
 
     const body = await req.json();
-    const { name, profile } = body;
+    const { name, profile, onboardingCompleted } = body;
 
     await dbConnect();
 
     const updateData = {};
     if (name && name.trim()) updateData.name = name.trim();
+    if (typeof onboardingCompleted === 'boolean') updateData.onboardingCompleted = onboardingCompleted;
+
     if (profile) {
       const allowed = [
         'skills',

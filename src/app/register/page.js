@@ -124,11 +124,13 @@ export default function RegisterPage() {
               <input
                 type="password"
                 className="input"
-                placeholder="Min 8 chars, 1 uppercase, 1 number"
+                placeholder="Min 8 chars, 1 uppercase, 1 lowercase, 1 number"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
                 minLength={8}
+                pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}"
+                title="Password must contain at least one number, one uppercase letter, one lowercase letter, and at least 8 or more characters"
               />
             </div>
 

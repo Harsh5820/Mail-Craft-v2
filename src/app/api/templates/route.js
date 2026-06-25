@@ -6,15 +6,18 @@ import { checkRateLimit } from '@/services/security.service';
 import { checkTemplateLimit } from '@/services/plan.service';
 import { z } from 'zod';
 
-export async function GET() {
+export async function GET(req) {
   try {
     const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
 
-    const templates = await templateService.getUserTemplates(session.user.id);
-    return NextResponse.json({ templates });
+    const result = await templateService.getUserTemplates(session.user.id, page, limit);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Get templates error:', error.message);
     return NextResponse.json({ error: 'Failed to fetch templates' }, { status: 500 });

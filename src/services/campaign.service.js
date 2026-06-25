@@ -5,12 +5,26 @@ import CampaignLog from '@/lib/models/CampaignLog';
 /**
  * Get all campaigns for a user
  */
-export async function getUserCampaigns(userId) {
+export async function getUserCampaigns(userId, page = 1, limit = 10) {
   await dbConnect();
-  return Campaign.find({ userId })
-    .populate('templateId', 'name subject')
-    .sort({ createdAt: -1 })
-    .lean();
+  const skip = (page - 1) * limit;
+
+  const [campaigns, total] = await Promise.all([
+    Campaign.find({ userId })
+      .populate('templateId', 'name subject')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Campaign.countDocuments({ userId })
+  ]);
+
+  return {
+    campaigns,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
 }
 
 /**

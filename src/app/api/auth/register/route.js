@@ -78,6 +78,7 @@ export async function POST(req) {
       role: isAdmin ? 'admin' : 'user',
       referralCode: newReferralCode,
       referredBy: referredById,
+      onboardingCompleted: false, // Force new users to complete onboarding
     });
 
     return NextResponse.json(

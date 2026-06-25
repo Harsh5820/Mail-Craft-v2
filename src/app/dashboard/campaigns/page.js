@@ -18,22 +18,41 @@ const statusConfig = {
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = async (pageNum = 1) => {
     try {
-      const res = await fetch('/api/campaigns');
+      const res = await fetch(`/api/campaigns?page=${pageNum}&limit=10`);
       const data = await res.json();
-      if (res.ok) setCampaigns(data.campaigns);
+      if (res.ok) {
+        if (pageNum === 1) {
+          setCampaigns(data.campaigns || []);
+        } else {
+          setCampaigns(prev => [...prev, ...(data.campaigns || [])]);
+        }
+        setTotalPages(data.totalPages || 1);
+        setPage(pageNum);
+      }
     } catch (err) {
       showToast('Failed to load campaigns', 'error');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchCampaigns();
+    fetchCampaigns(1);
   }, []);
+
+  const handleLoadMore = () => {
+    if (page < totalPages) {
+      setLoadingMore(true);
+      fetchCampaigns(page + 1);
+    }
+  };
 
   const handleAction = async (id, action) => {
     try {
@@ -44,7 +63,8 @@ export default function CampaignsPage() {
       });
       if (!res.ok) throw new Error('Failed');
       showToast(`Campaign ${action}d`);
-      fetchCampaigns();
+      // Reload current list without adding duplicates, or just refresh first page
+      fetchCampaigns(1);
     } catch (err) {
       showToast(`Failed to ${action} campaign`, 'error');
     }
@@ -58,8 +78,8 @@ export default function CampaignsPage() {
         const data = await res.json();
         throw new Error(data.error);
       }
-      showToast(`Campaign "${name}" deleted`);
-      fetchCampaigns();
+      showToast('Campaign deleted');
+      fetchCampaigns(1);
     } catch (err) {
       showToast(err.message || 'Failed to delete', 'error');
     }
@@ -155,6 +175,18 @@ export default function CampaignsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+      
+      {!loading && page < totalPages && (
+        <div className="flex justify-center mt-6">
+          <button 
+            onClick={handleLoadMore} 
+            disabled={loadingMore} 
+            className="btn btn-ghost"
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
         </div>
       )}
     </div>

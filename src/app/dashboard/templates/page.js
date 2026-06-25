@@ -8,6 +8,9 @@ import { showToast } from '@/components/ui/Toast';
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [previewTemplate, setPreviewTemplate] = useState(null);
@@ -15,6 +18,7 @@ export default function TemplatesPage() {
   const [saving, setSaving] = useState(false);
   const [aiObjective, setAiObjective] = useState('');
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [remainingAiGenerations, setRemainingAiGenerations] = useState(2);
   const [userProfile, setUserProfile] = useState(null);
 
   const fetchProfile = async () => {
@@ -27,22 +31,38 @@ export default function TemplatesPage() {
     } catch (err) {}
   };
 
-  const fetchTemplates = async () => {
+  const fetchTemplates = async (pageNum = 1) => {
     try {
-      const res = await fetch('/api/templates');
+      const res = await fetch(`/api/templates?page=${pageNum}&limit=20`);
       const data = await res.json();
-      if (res.ok) setTemplates(data.templates);
+      if (res.ok) {
+        if (pageNum === 1) {
+          setTemplates(data.templates || []);
+        } else {
+          setTemplates(prev => [...prev, ...(data.templates || [])]);
+        }
+        setTotalPages(data.totalPages || 1);
+        setPage(pageNum);
+      }
     } catch (err) {
       showToast('Failed to load templates', 'error');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchTemplates();
+    fetchTemplates(1);
     fetchProfile();
   }, []);
+
+  const handleLoadMore = () => {
+    if (page < totalPages) {
+      setLoadingMore(true);
+      fetchTemplates(page + 1);
+    }
+  };
 
   const renderLivePreview = () => {
     let { html, subject } = form;
@@ -87,11 +107,11 @@ export default function TemplatesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showToast(editingTemplate ? 'Template updated!' : 'Template created!');
+      showToast(editingTemplate ? 'Template updated!' : 'Template created');
       setShowModal(false);
       setEditingTemplate(null);
       setForm({ name: '', subject: '', html: '' });
-      fetchTemplates();
+      fetchTemplates(1);
     } catch (err) {
       showToast(err.message || 'Failed to save template', 'error');
     } finally {
@@ -103,8 +123,8 @@ export default function TemplatesPage() {
     try {
       const res = await fetch(`/api/templates/${id}/duplicate`, { method: 'POST' });
       if (!res.ok) throw new Error('Failed to duplicate');
-      showToast('Template duplicated!');
-      fetchTemplates();
+      showToast('Template duplicated');
+      fetchTemplates(1);
     } catch (err) {
       showToast('Failed to duplicate template', 'error');
     }
@@ -116,7 +136,7 @@ export default function TemplatesPage() {
       const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete');
       showToast('Template deleted');
-      fetchTemplates();
+      fetchTemplates(1);
     } catch (err) {
       showToast('Failed to delete template', 'error');
     }
@@ -166,6 +186,9 @@ export default function TemplatesPage() {
         subject: data.subject,
         html: data.html,
       }));
+      if (typeof data.remainingGenerations !== 'undefined') {
+        setRemainingAiGenerations(data.remainingGenerations);
+      }
       showToast(`Template generated! (${data.remainingGenerations} generations left today)`);
     } catch (err) {
       showToast(err.message || 'Failed to generate template', 'error');
@@ -254,6 +277,18 @@ export default function TemplatesPage() {
         </div>
       )}
 
+      {!loading && page < totalPages && (
+        <div className="flex justify-center mt-6">
+          <button 
+            onClick={handleLoadMore} 
+            disabled={loadingMore} 
+            className="btn btn-ghost"
+          >
+            {loadingMore ? 'Loading...' : 'Load More'}
+          </button>
+        </div>
+      )}
+
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
@@ -284,7 +319,7 @@ export default function TemplatesPage() {
               {/* AI Generator Section */}
               <div className="p-4 rounded-xl border border-primary-500/20 bg-gradient-to-br from-primary-600/10 to-transparent">
                 <label className="block text-sm font-medium text-primary-300 mb-1.5 flex items-center gap-2">
-                  ✨ Write with Gemini (Premium)
+                  ✨ Write with AI (Premium)
                 </label>
                 <p className="text-xs text-surface-400 mb-3">Describe the role, company, or tone you want, and AI will write the template using your profile.</p>
                 <div className="flex gap-2">
@@ -300,7 +335,7 @@ export default function TemplatesPage() {
                     disabled={generatingAI || !aiObjective.trim()} 
                     className="btn btn-primary whitespace-nowrap"
                   >
-                    {generatingAI ? 'Generating...' : 'Generate (Limit: 2/day)'}
+                    {generatingAI ? 'Generating...' : `Generate (Limit: ${remainingAiGenerations}/day)`}
                   </button>
                 </div>
               </div>

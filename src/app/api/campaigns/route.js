@@ -5,15 +5,19 @@ import { createCampaignSchema } from '@/schemas/campaign.schema';
 import { checkRateLimit } from '@/services/security.service';
 import { checkCampaignLimit } from '@/services/plan.service';
 
-export async function GET() {
+export async function GET(req) {
   try {
     const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const campaigns = await campaignService.getUserCampaigns(session.user.id);
-    return NextResponse.json({ campaigns });
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '10', 10);
+
+    const result = await campaignService.getUserCampaigns(session.user.id, page, limit);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Get campaigns error:', error.message);
     return NextResponse.json({ error: 'Failed to fetch campaigns' }, { status: 500 });
