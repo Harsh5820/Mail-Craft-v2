@@ -8,7 +8,7 @@ export async function GET(req) {
     if (!session?.user || session.user.role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
+    //added new layes of fix
     const requests = await adminService.getPendingRequests();
     return NextResponse.json({ requests });
   } catch (error) {
