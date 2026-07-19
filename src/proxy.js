@@ -5,7 +5,8 @@ export async function proxy(request) {
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
   const { pathname } = request.nextUrl;
 
-  // Protected routes
+  // Protected routes 
+  //always to new why
   if (pathname.startsWith('/dashboard')) {
     if (!token) {
       const loginUrl = new URL('/login', request.url);
