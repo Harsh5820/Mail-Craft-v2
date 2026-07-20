@@ -135,24 +135,23 @@ export async function POST(req, { params }) {
       return NextResponse.json({ message: 'Campaign scheduled', campaignId: id });
     }
 
-    // Start the campaign queue in the background using Next.js 'after'
-    after(() => {
-      startCampaignQueue(
-        id,
-        { email: validated.email, appPassword: validated.appPassword },
-        {
-          name: senderName,
-          skills: validated.skills || '',
-          portfolio: validated.portfolio || '',
-          linkedin: validated.linkedin || '',
-          experience: validated.experience || '',
-        },
-        {
-          resumeBase64: validated.resumeBase64,
-          resumeFileName: validated.resumeFileName,
-        }
-      ).catch(err => console.error('Background campaign error:', err));
-    });
+    // Await the campaign queue directly so Vercel does not kill it. 
+    // maxDuration = 60 will allow this to run for up to 60 seconds.
+    await startCampaignQueue(
+      id,
+      { email: validated.email, appPassword: validated.appPassword },
+      {
+        name: senderName,
+        skills: validated.skills || '',
+        portfolio: validated.portfolio || '',
+        linkedin: validated.linkedin || '',
+        experience: validated.experience || '',
+      },
+      {
+        resumeBase64: validated.resumeBase64,
+        resumeFileName: validated.resumeFileName,
+      }
+    );
 
     return NextResponse.json({ message: 'Campaign started', campaignId: id });
   } catch (error) {

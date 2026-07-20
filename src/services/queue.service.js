@@ -35,8 +35,8 @@ export async function startCampaignQueue(campaignId, credentials, senderInfo, at
   // Mark campaign as active
   activeCampaigns.set(campaignId, { paused: false, cancelled: false });
 
-  // Run in background — don't await
-  processCampaign(campaignId, credentials, senderInfo, attachment).catch(async (error) => {
+  // Await the process to ensure Vercel doesn't kill it midway
+  await processCampaign(campaignId, credentials, senderInfo, attachment).catch(async (error) => {
     console.error(`Campaign ${campaignId} fatal error:`, error.message);
     await Campaign.findByIdAndUpdate(campaignId, {
       status: 'failed',
