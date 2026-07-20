@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { getSession } from '@/lib/auth';
 import * as campaignService from '@/services/campaign.service';
 import { startCampaignQueue, isCampaignActive } from '@/services/queue.service';
@@ -6,6 +7,9 @@ import { verifyCredentials } from '@/services/mail.service';
 import { startCampaignSchema } from '@/schemas/campaign.schema';
 import { canSendEmails, checkAndDowngradePlan } from '@/services/plan.service';
 import dbConnect from '@/lib/db';
+
+export const maxDuration = 60; // Allow maximum execution time on Vercel Hobby
+
 
 export async function POST(req, { params }) {
   try {
@@ -131,22 +135,24 @@ export async function POST(req, { params }) {
       return NextResponse.json({ message: 'Campaign scheduled', campaignId: id });
     }
 
-    // Start the campaign queue immediately (fire and forget)
-    await startCampaignQueue(
-      id,
-      { email: validated.email, appPassword: validated.appPassword },
-      {
-        name: senderName,
-        skills: validated.skills || '',
-        portfolio: validated.portfolio || '',
-        linkedin: validated.linkedin || '',
-        experience: validated.experience || '',
-      },
-      {
-        resumeBase64: validated.resumeBase64,
-        resumeFileName: validated.resumeFileName,
-      }
-    );
+    // Start the campaign queue in the background using Next.js 'after'
+    after(() => {
+      startCampaignQueue(
+        id,
+        { email: validated.email, appPassword: validated.appPassword },
+        {
+          name: senderName,
+          skills: validated.skills || '',
+          portfolio: validated.portfolio || '',
+          linkedin: validated.linkedin || '',
+          experience: validated.experience || '',
+        },
+        {
+          resumeBase64: validated.resumeBase64,
+          resumeFileName: validated.resumeFileName,
+        }
+      ).catch(err => console.error('Background campaign error:', err));
+    });
 
     return NextResponse.json({ message: 'Campaign started', campaignId: id });
   } catch (error) {
