@@ -10,11 +10,7 @@ export function createTransporter(email, appPassword) {
     auth: {
       user: email,
       pass: appPassword,
-    },
-    pool: true,
-    maxConnections: 1, // Single connection to mimic human behavior
-    maxMessages: 10,
-    rateDelta: 30000, // 30 seconds between messages
+    }
   });
 }
 
